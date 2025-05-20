@@ -1,3 +1,5 @@
 .idea
 .venv
 .appunti
+.DS_store
+_pycache_
