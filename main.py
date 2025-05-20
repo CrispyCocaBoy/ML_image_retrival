@@ -13,9 +13,9 @@ def run(training = True):
 
     # Data_loading
     train_loader, query_loader, gallery_loader = retrival_data_loading(
-        train_data_root="data_example_animal/train",
-        query_data_root="data_example_animal/test/query",
-        gallery_data_root="data_example_animal/test/gallery",
+        train_data_root="data_example_rota/train",
+        query_data_root="data_example_rota/test/query",
+        gallery_data_root="data_example_rota/test/gallery",
         triplet_loss=True,
         batch_size=32
     )
@@ -46,6 +46,7 @@ def run(training = True):
     # Test
     ## Alcune volte vogliamo solo eseguire il test senza allenamento quindi prendiamo quello che abbiamo già allenato
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
     model = resnet50(pretrained=False, embedding_dim=128)
     model.load_state_dict(torch.load("model_repository/resnet_triplet.pth", map_location=device))
     model = model.to(device)
@@ -58,7 +59,7 @@ def run(training = True):
     results = compute_results(query_df, gallery_df, metric="euclidean")
 
     ## Confronto con la ground truth 
-    evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
+    evaluation(results, "data_example_rota/query_to_gallery_mapping.json")
 
 
 if __name__ == "__main__":
