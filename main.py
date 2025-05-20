@@ -13,9 +13,9 @@ def run(training = True):
 
     # Data_loading
     train_loader, query_loader, gallery_loader = retrival_data_loading(
-        train_data_root="data_example_rota/train",
-        query_data_root="data_example_rota/test/query",
-        gallery_data_root="data_example_rota/test/gallery",
+        train_data_root="data_example_animal/train",
+        query_data_root="data_example_animal/test/query",
+        gallery_data_root="data_example_animal/test/gallery",
         triplet_loss=True,
         batch_size=32
     )
@@ -58,7 +58,7 @@ def run(training = True):
     results = compute_results(query_df, gallery_df, metric="euclidean")
 
     ## Confronto con la ground truth 
-    evaluation(results, "data_example_rota/query_to_gallery_mapping.json")
+    evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
 
 
 if __name__ == "__main__":
