@@ -58,10 +58,10 @@ def run(training = True):
     results = compute_results(query_df, gallery_df, metric="euclidean")
 
     ## Confronto con la ground truth 
-    evaluation(results, "data_example_rota/test/ground_truth.json")
+    evaluation(results, "data_example_rota/query_to_gallery_mapping.json")
 
 
 if __name__ == "__main__":
-    run(training=True)
+    run(training=False)
 
 

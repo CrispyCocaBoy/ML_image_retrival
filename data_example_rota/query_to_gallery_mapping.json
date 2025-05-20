@@ -1,6 +1,6 @@
 [
   {
-    "filename": "test_folder/query_images/4597118805213184.jpg",
+    "filename": "test_folder/query_images/000002.jpg",
     "gallery_images": [
       "test_folder/gallery_images/painting_085_000045.jpg",
       "test_folder/gallery_images/painting_085_000084.jpg",
@@ -8,7 +8,7 @@
     ]
   },
   {
-    "filename": "test_folder/query_images/000002.jpg",
+    "filename": "test_folder/query_images/n01855672_10973.jpg",
     "gallery_images": [
       "test_folder/gallery_images/n01855672_1037.jpg",
       "test_folder/gallery_images/n01855672_4197.jpg",
