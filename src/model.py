@@ -1,73 +1,9 @@
-import torch.nn as nn
-import torchvision.models as models
-import torch.nn.functional as F
-from torchvision.models import ResNet50_Weights
 import torch
-
-class ResNetEmbedder(nn.Module):
-    def __init__(self, embedding_dim=128):
-        super().__init__()
-
-        # Carica ResNet-50 pre-addestrata
-        self.backbone = models.resnet50(weights=ResNet50_Weights.DEFAULT)
-        in_features = self.backbone.fc.in_features
-
-        # Rimuove il classificatore originale
-        self.backbone.fc = nn.Identity()
-
-        # Proiezione nello spazio degli embedding
-        self.embedding = nn.Linear(in_features, embedding_dim)
-
-    def forward(self, x):
-        x = self.backbone(x)           # output: [batch_size, 2048]
-        x = self.embedding(x)          # output: [batch_size, embedding_dim]
-        x = F.normalize(x, p=2, dim=1) # L2-normalizzazione
-        return x
-
-
-def resnet50(pretrained=True, embedding_dim=128):
-    """
-    Factory function per creare un ResNetEmbedder con o senza pesi ImageNet.
-    """
-    model = ResNetEmbedder(embedding_dim=embedding_dim)
-    if not pretrained:
-        # Reset dei pesi del backbone (se non vuoi ImageNet)
-        for param in model.backbone.parameters():
-            if param.requires_grad and len(param.shape) >= 2:  # Solo per matrici di peso
-                nn.init.kaiming_normal_(param.data, nonlinearity="relu")
-            elif param.requires_grad:  # Per bias e altri parametri 1D
-                nn.init.zeros_(param.data)
-    return model
-
-class ResNetEmbedderV2(nn.Module):
-    def __init__(self, embedding_dim=128):
-        super().__init__()
-
-        # Carica ResNet-50 pre-addestrata
-        self.backbone = models.resnet50(weights=ResNet50_Weights.DEFAULT)
-        in_features = self.backbone.fc.in_features
-
-        # Rimuove il classificatore originale
-        self.backbone.fc = nn.Identity()
-
-        # Proiezione nello spazio degli embedding
-        self.embedding = nn.Sequential(
-            nn.Linear(in_features, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(512, embedding_dim),
-            nn.BatchNorm1d(embedding_dim)  # opzionale, ma utile per stabilizzare
-        )
-
-    def forward(self, x):
-        x = self.backbone(x)           # output: [batch_size, 2048]
-        x = self.embedding(x)          # output: [batch_size, embedding_dim]
-        x = F.normalize(x, p=2, dim=1) # L2-normalizzazione
-        return x
-
-
-# Resnet50V2
+import torch.nn as nn
+import torch.nn.functional as F
+import torchvision.models as models
+from torchvision.models import ResNet50_Weights
+from config import ModelConfig
 
 class GeM(nn.Module):
     def __init__(self, p=3.0, eps=1e-6):
@@ -77,39 +13,34 @@ class GeM(nn.Module):
 
     def forward(self, x):
         return F.adaptive_avg_pool2d(
-            x.clamp(min=self.eps).pow(self.p),
-            (1, 1)
+            x.clamp(min=self.eps).pow(self.p), (1, 1)
         ).pow(1.0 / self.p).squeeze(-1).squeeze(-1)
 
-class ResNetEmbedderV2(nn.Module):
-    def __init__(self, embedding_dim=128, freeze_backbone=False):
+class ResNetEmbedder(nn.Module):
+    def __init__(self, embedding_dim=128, dropout=0.3, batch_norm=True, freeze_backbone=False):
         super().__init__()
 
-        # 1. Carica ResNet50 pre-addestrata su ImageNet
         self.backbone = models.resnet50(weights=ResNet50_Weights.DEFAULT)
-
-        # 2. Rimuovi l'avgpool e il classificatore
         self.backbone.avgpool = nn.Identity()
         self.backbone.fc = nn.Identity()
+        self.pooling = GeM()
 
-        # 3. Aggiungi GeM pooling per una estrazione più flessibile
-        self.gem = GeM()
-
-        # 4. Freeze opzionale dei primi layer del backbone
         if freeze_backbone:
             for name, param in self.backbone.named_parameters():
-                if not name.startswith("layer4"):  # Solo l'ultimo blocco rimane aggiornabile
+                if not name.startswith("layer4"):
                     param.requires_grad = False
 
-        # 5. Testa di proiezione (projection head)
-        self.embedding = nn.Sequential(
-            nn.Linear(2048, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(512, embedding_dim),
-            nn.BatchNorm1d(embedding_dim)
-        )
+        layers = [nn.Linear(2048, 512)]
+        if batch_norm:
+            layers.append(nn.BatchNorm1d(512))
+        layers.append(nn.ReLU(inplace=True))
+        if dropout > 0:
+            layers.append(nn.Dropout(p=dropout))
+        layers.append(nn.Linear(512, embedding_dim))
+        if batch_norm:
+            layers.append(nn.BatchNorm1d(embedding_dim))
+
+        self.embedding = nn.Sequential(*layers)
 
     def forward(self, x):
         x = self.backbone.conv1(x)
@@ -122,13 +53,18 @@ class ResNetEmbedderV2(nn.Module):
         x = self.backbone.layer3(x)
         x = self.backbone.layer4(x)
 
-        x = self.gem(x)                # GeM pooling al posto di avgpool
-        x = self.embedding(x)         # Proiezione nello spazio degli embedding
-        x = F.normalize(x, p=2, dim=1) # L2-normalizzazione finale
+        x = self.pooling(x)
+        x = self.embedding(x)
+        x = F.normalize(x, p=2, dim=1)
         return x
 
-def resnet50_embedder(embedding_dim=128, pretrained=True, freeze_backbone=False):
-    model = ResNetEmbedderV2(embedding_dim=embedding_dim, freeze_backbone=freeze_backbone)
+def resnet50(model_cfg: ModelConfig, pretrained=True):
+    model = ResNetEmbedder(
+        embedding_dim=model_cfg.embedding_dim,
+        dropout=model_cfg.dropout,
+        batch_norm=model_cfg.batch_norm,
+        freeze_backbone=model_cfg.freeze_backbone
+    )
 
     if not pretrained:
         for param in model.backbone.parameters():
@@ -138,5 +74,3 @@ def resnet50_embedder(embedding_dim=128, pretrained=True, freeze_backbone=False)
                 nn.init.zeros_(param.data)
 
     return model
-
-
