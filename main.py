@@ -1,68 +1,98 @@
-from src.data_loading import *
+from src.data_loading import retrival_data_loading
 from src.model import resnet50
 from src.training_loop import training_loop
 from src.embedding import extract_embeddings
 from src.results import compute_results
 from src.evaluation import evaluation
-
-import os
+from src.triplet_dataset import TripletDataset
+from config import ModelConfig, TrainingConfig
 import torch
 
+def run(training=True):
+    model_cfg = ModelConfig()
+    train_cfg = TrainingConfig()
 
-def run(training = True):
+    # === DEVICE ===
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-    # Data_loading
-    train_loader, query_loader, gallery_loader = retrival_data_loading(
-        train_data_root="data_example_rota/train",
-        query_data_root="data_example_rota/test/query",
-        gallery_data_root="data_example_rota/test/gallery",
-        triplet_loss=True,
-        batch_size=32
+    # === DATA LOADING ===
+    base_train_loader, query_loader, gallery_loader = retrival_data_loading(
+        train_data_root="data_example_animal/train",
+        query_data_root="data_example_animal/test/query",
+        gallery_data_root="data_example_animal/test/gallery",
+        batch_size=train_cfg.batch_size
     )
     print("Loaders pronti!")
-    print("Train batches:", len(train_loader))
+    print("Train batches (base):", len(base_train_loader))
     print("Query images:", len(query_loader.dataset))
     print("Gallery images:", len(gallery_loader.dataset))
 
-    if training == True:
-        # Modello utilizzato
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        model = resnet50(pretrained=True, embedding_dim=128).to(device)
-        model = torch.compile(model, backend="aot_eager")
+    if training:
+        # === MINING MODEL (eval only) ===
+        mining_model = resnet50(
+            model_cfg=model_cfg,
+            pretrained=True
+        ).to(device)
+        mining_model.eval()
 
-        # training del modello
+        # === TRAINING MODEL ===
+        model = resnet50(
+            model_cfg=model_cfg,
+            pretrained=True
+        ).to(device)
+
+        if train_cfg.compiled:
+            model = torch.compile(model, backend="aot_eager")
+
+        # === TRIPLET DATASET ===
+        train_dataset = TripletDataset(
+            image_folder_dataset=base_train_loader.dataset,
+            mining_strategy=train_cfg.mining_strategy,
+            model=mining_model,
+            device=device,
+            margin=train_cfg.margin
+        )
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=train_cfg.batch_size,
+            shuffle=True,
+            num_workers=4
+        )
+
+        # === TRAINING ===
         training_loop(
             train_loader=train_loader,
             model=model,
-            optimizer_type = "adam",
-            epochs=10,
-            loss="triplet"
+            optimizer_type=train_cfg.optimizer,
+            epochs=train_cfg.epochs,
+            loss=train_cfg.loss,
+            lr=train_cfg.learning_rate,
+            margin=train_cfg.margin,
+            weight_decay=train_cfg.weight_decay
         )
 
-        # Salvare il modello allenato
-        torch.save(model._orig_mod.state_dict(), "model_repository/resnet_triplet.pth")
+        # === SAVE MODEL ===
+        torch.save(model._orig_mod.state_dict(), train_cfg.model_save_path)
         print("Modello salvato")
 
-    # Test
-    ## Alcune volte vogliamo solo eseguire il test senza allenamento quindi prendiamo quello che abbiamo già allenato
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
-    model = resnet50(pretrained=False, embedding_dim=128)
-    model.load_state_dict(torch.load("model_repository/resnet_triplet.pth", map_location=device))
+    # === EVALUATION MODEL ===
+    model = resnet50(
+        model_cfg=model_cfg,
+        pretrained=True
+    )
+    model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device, weights_only=True))
     model = model.to(device)
 
-    ## Estraiamo gli embeddings dai due dataset
+    # === EMBEDDING EXTRACTION ===
     query_df = extract_embeddings(query_loader, model, device)
     gallery_df = extract_embeddings(gallery_loader, model, device)
 
-    ## Calcoliamo le immagini più vicine
+    # === COMPUTE RESULTS ===
     results = compute_results(query_df, gallery_df, metric="euclidean")
 
-    ## Confronto con la ground truth 
+    # === EVALUATION ===
     evaluation(results, "data_example_rota/query_to_gallery_mapping.json")
 
-
 if __name__ == "__main__":
-    run(training=False)
-
-
+    run(training=True)
