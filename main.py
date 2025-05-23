@@ -1,5 +1,5 @@
 from src.data_loading import retrival_data_loading
-from src.model import resnet50v2
+from src.model import resnet50, resnet50v2
 from src.training_loop import training_loop
 from src.embedding import extract_embeddings
 from src.results import compute_results
@@ -17,7 +17,7 @@ def run(training=True):
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    elif hasattr(torch.backends, "mps"):
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
@@ -39,15 +39,13 @@ def run(training=True):
         # === MINING MODEL (solo per costruire triplette) ===
         mining_model = resnet50v2(
             model_cfg=model_cfg,
-            pretrained=True
-        ).to(device)
+            pretrained=True).to(device)
         mining_model.eval()
 
         # === TRAINING MODEL ===
         model = resnet50v2(
             model_cfg=model_cfg,
-            pretrained=True  # ok, partiamo da pesi ImageNet
-        ).to(device)
+            pretrained=True ).to(device)
 
         # ⚠️ Compilazione opzionale
         if train_cfg.compiled:
@@ -94,16 +92,14 @@ def run(training=True):
     # === EVALUATION MODEL ===
     if torch.cuda.is_available():
         device = torch.device("cuda")
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    elif hasattr(torch.backends, "mps"):
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
     print(f"Using device: {device}")
     model = resnet50v2(
         model_cfg=model_cfg,
-        pretrained=False 
-        embedding_dim=model_cfg.embedding_dim,
-)
+        pretrained=False)
     model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device))
     model = model.to(device)
 
