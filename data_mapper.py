@@ -6,7 +6,7 @@ from pathlib import Path
 from collections import defaultdict
 
 
-def prepare_dataset(base_dir, query_per_class=1, gt_per_query=5, gallery_pct=0.8, seed=42):
+def prepare_dataset(base_dir, query_per_class=1, gt_per_query=3, gallery_pct=0.8, seed=42):
     random.seed(seed)
 
     base_dir = Path(base_dir)
@@ -33,12 +33,16 @@ def prepare_dataset(base_dir, query_per_class=1, gt_per_query=5, gallery_pct=0.8
         # Random shuffle per selezione
         random.shuffle(images)
         query_img = images.pop()  # 1 query
-        gt_imgs = [images.pop() for _ in range(gt_per_query)]  # 5 ground truth
+        gt_imgs = [images.pop() for _ in range(gt_per_query)]  # 3 ground truth
 
         # Copia query
         shutil.copy(query_img, test_query_dir / query_img.name)
         used_images.add(query_img)
-        used_images.update(gt_imgs)
+
+        # Copia ground truth anche nella gallery
+        for img in gt_imgs:
+            shutil.copy(img, test_gallery_dir / img.name)
+            used_images.add(img)
 
         query_mapping[query_img.name] = [img.name for img in gt_imgs]
 
@@ -70,9 +74,10 @@ def prepare_dataset(base_dir, query_per_class=1, gt_per_query=5, gallery_pct=0.8
     # Pulizia immagini usate dal train
     for img in used_images:
         try:
-            os.remove(img)
-        except FileNotFoundError:
-            continue
+            if img.exists():
+                img.unlink()
+        except Exception as e:
+            print(f"Errore durante l'eliminazione di {img}: {e}")
 
     # Salva mapping
     with open(base_dir / "query_to_gallery_mapping.json", "w") as f:
@@ -80,10 +85,10 @@ def prepare_dataset(base_dir, query_per_class=1, gt_per_query=5, gallery_pct=0.8
 
     print(f"✅ Dataset pronto.")
     print(f"📁 Query: {len(query_mapping)}")
-    print(f"📁 Gallery: {len(gallery_final)}")
+    print(f"📁 Gallery: {len(list(test_gallery_dir.glob('*.jpg')))}")
     print(f"📁 Ground truth per query: {gt_per_query} immagini ciascuna")
 
 
 # Usa lo script
 if __name__ == "__main__":
-    prepare_dataset("data_example")
+    prepare_dataset("data_example_animal")

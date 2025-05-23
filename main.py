@@ -1,5 +1,5 @@
 from src.data_loading import *
-from src.model import resnet50
+from src.model import resnet50v2
 from src.training_loop import training_loop
 from src.embedding import extract_embeddings
 from src.results import compute_results
@@ -13,9 +13,9 @@ def run(training = True):
 
     # Data_loading
     train_loader, query_loader, gallery_loader = retrival_data_loading(
-        train_data_root="data_example_rota/train",
-        query_data_root="data_example_rota/test/query",
-        gallery_data_root="data_example_rota/test/gallery",
+        train_data_root="data_example_animal/train",
+        query_data_root="data_example_animal/test/query",
+        gallery_data_root="data_example_animal/test/gallery",
         triplet_loss=True,
         batch_size=32
     )
@@ -26,8 +26,9 @@ def run(training = True):
 
     if training == True:
         # Modello utilizzato
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        model = resnet50(pretrained=True, embedding_dim=128).to(device)
+        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        print(f"📡 In uso: {device}")
+        model = resnet50v2(pretrained=True, embedding_dim=128).to(device)
         model = torch.compile(model, backend="aot_eager")
 
         # training del modello
@@ -45,9 +46,9 @@ def run(training = True):
 
     # Test
     ## Alcune volte vogliamo solo eseguire il test senza allenamento quindi prendiamo quello che abbiamo già allenato
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
-    model = resnet50(pretrained=False, embedding_dim=128)
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    print(f"📡 In uso: {device}")
+    model = resnet50v2(pretrained=False, embedding_dim=128)
     model.load_state_dict(torch.load("model_repository/resnet_triplet.pth", map_location=device))
     model = model.to(device)
 
@@ -59,10 +60,10 @@ def run(training = True):
     results = compute_results(query_df, gallery_df, metric="euclidean")
 
     ## Confronto con la ground truth 
-    evaluation(results, "data_example_rota/query_to_gallery_mapping.json")
+    evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
 
 
 if __name__ == "__main__":
-    run(training=False)
+    run(training=True)
 
 

@@ -127,7 +127,7 @@ class ResNetEmbedderV2(nn.Module):
         x = F.normalize(x, p=2, dim=1) # L2-normalizzazione finale
         return x
 
-def resnet50_embedder(embedding_dim=128, pretrained=True, freeze_backbone=False):
+def resnet50v2(embedding_dim=128, pretrained=True, freeze_backbone=False):
     model = ResNetEmbedderV2(embedding_dim=embedding_dim, freeze_backbone=freeze_backbone)
 
     if not pretrained:
