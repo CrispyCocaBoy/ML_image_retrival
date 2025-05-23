@@ -5,8 +5,7 @@ import json
 from pathlib import Path
 from collections import defaultdict
 
-
-def prepare_dataset(base_dir, query_per_class=1, gt_per_query=3, gallery_pct=0.8, seed=42):
+def prepare_dataset(base_dir, query_per_class=1, gt_per_query=3, seed=42):
     random.seed(seed)
 
     base_dir = Path(base_dir)
@@ -19,14 +18,14 @@ def prepare_dataset(base_dir, query_per_class=1, gt_per_query=3, gallery_pct=0.8
     test_query_dir.mkdir(parents=True, exist_ok=True)
     test_gallery_dir.mkdir(parents=True, exist_ok=True)
 
-    all_gallery_images = []
     all_classes = sorted([d for d in train_dir.iterdir() if d.is_dir()])
     used_images = set()
 
     for cls_path in all_classes:
         cls_name = cls_path.name
         images = sorted(list(cls_path.glob("*.jpg")))
-        if len(images) < query_per_class + gt_per_query + 1:
+
+        if len(images) < query_per_class + gt_per_query:
             print(f"❗ Classe '{cls_name}' ha troppe poche immagini, saltata.")
             continue
 
@@ -39,39 +38,14 @@ def prepare_dataset(base_dir, query_per_class=1, gt_per_query=3, gallery_pct=0.8
         shutil.copy(query_img, test_query_dir / query_img.name)
         used_images.add(query_img)
 
-        # Copia ground truth anche nella gallery
+        # Copia ground truth nella gallery
         for img in gt_imgs:
             shutil.copy(img, test_gallery_dir / img.name)
             used_images.add(img)
 
         query_mapping[query_img.name] = [img.name for img in gt_imgs]
 
-        # Resto disponibile per bilanciamento gallery
-        all_gallery_images.extend([(img, cls_name) for img in images])
-
-    # Bilanciamento: prendiamo una % (gallery_pct) delle immagini totali
-    total_per_class = defaultdict(list)
-    for img, cls_name in all_gallery_images:
-        total_per_class[cls_name].append(img)
-
-    # Numero target immagini gallery totali
-    total_images = sum(len(v) for v in total_per_class.values())
-    gallery_target = int(total_images * gallery_pct)
-
-    # Distribuzione bilanciata tra classi
-    num_classes = len(total_per_class)
-    per_class_target = max(1, gallery_target // num_classes)
-
-    gallery_final = []
-
-    for cls_name, imgs in total_per_class.items():
-        selected = imgs[:per_class_target]
-        for img in selected:
-            shutil.copy(img, test_gallery_dir / img.name)
-            used_images.add(img)
-            gallery_final.append(img)
-
-    # Pulizia immagini usate dal train
+    # Rimuove le immagini usate dal train
     for img in used_images:
         try:
             if img.exists():
@@ -88,7 +62,19 @@ def prepare_dataset(base_dir, query_per_class=1, gt_per_query=3, gallery_pct=0.8
     print(f"📁 Gallery: {len(list(test_gallery_dir.glob('*.jpg')))}")
     print(f"📁 Ground truth per query: {gt_per_query} immagini ciascuna")
 
+    # Report per classe (solo GT)
+    gallery_class_count = defaultdict(int)
+    for cls_path in all_classes:
+        cls_name = cls_path.name
+        if len(list(cls_path.glob("*.jpg"))) < query_per_class + gt_per_query:
+            continue
+        gallery_class_count[cls_name] = gt_per_query
+
+    print("📊 Immagini in gallery per categoria (solo ground truth):")
+    for cls, count in gallery_class_count.items():
+        print(f"  🐾 {cls}: {count}")
 
 # Usa lo script
 if __name__ == "__main__":
     prepare_dataset("data_example_animal")
+
