@@ -203,11 +203,3 @@ def debug_data_formats(predictions_path, ground_truth_path):
         print()
 
 
-# Esempio di utilizzo con debug
-if __name__ == "__main__":
-    # Per debuggare i tuoi dati:
-    debug_data_formats("path/to/predictions.json", "path/to/ground_truth.json")
-    
-    # Per valutare con debug attivo:
-    accuracy = evaluation("predictions.json", "ground_truth.json", top_k=3, verbose=True, debug=True)
-    pass

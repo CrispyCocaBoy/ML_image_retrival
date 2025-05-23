@@ -111,7 +111,7 @@ def run(training=True):
     results = compute_results(query_df, gallery_df, metric="euclidean")
 
     # === EVALUATION ===
-    evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
+    evaluation(results, "data_example_animal/query_to_gallery_mapping.json", top_k=3, verbose=True, debug=True)
 '''
     # === VISUALIZZAZIONE ===
     show_image_results(
@@ -123,5 +123,5 @@ def run(training=True):
     )
 '''
 if __name__ == "__main__":
-    run(training=True)
+    run(training=False)
 
