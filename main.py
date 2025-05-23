@@ -5,22 +5,24 @@ from src.embedding import extract_embeddings
 from src.results import compute_results
 from src.evaluation import evaluation
 from src.triplet_dataset import TripletDataset
-from config import ModelConfig, TrainingConfig
+from src.show_images import show_image_results
+from config import DataConfig, ModelConfig, TrainingConfig
+from multiprocessing import cpu_count
 import torch
 
 def run(training=True):
     model_cfg = ModelConfig()
     train_cfg = TrainingConfig()
+    data_cfg = DataConfig()
 
-    # === DEVICE ===
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # === DATA LOADING ===
     base_train_loader, query_loader, gallery_loader = retrival_data_loading(
-        train_data_root="data_example_animal/train",
-        query_data_root="data_example_animal/test/query",
-        gallery_data_root="data_example_animal/test/gallery",
+        train_data_root=data_cfg.train_data_root,
+        query_data_root=data_cfg.query_data_root,
+        gallery_data_root=data_cfg.gallery_data_root,
         batch_size=train_cfg.batch_size
     )
     print("Loaders pronti!")
@@ -29,7 +31,7 @@ def run(training=True):
     print("Gallery images:", len(gallery_loader.dataset))
 
     if training:
-        # === MINING MODEL (eval only) ===
+        # === MINING MODEL (solo per costruire triplette) ===
         mining_model = resnet50(
             model_cfg=model_cfg,
             pretrained=True
@@ -39,11 +41,15 @@ def run(training=True):
         # === TRAINING MODEL ===
         model = resnet50(
             model_cfg=model_cfg,
-            pretrained=True
+            pretrained=True  # ok, partiamo da pesi ImageNet
         ).to(device)
 
+        # ⚠️ Compilazione opzionale
         if train_cfg.compiled:
-            model = torch.compile(model, backend="aot_eager")
+            try:
+                model = torch.compile(model, backend="aot_eager")
+            except Exception as e:
+                print("⚠️ torch.compile fallita, continuo senza compilazione:", e)
 
         # === TRIPLET DATASET ===
         train_dataset = TripletDataset(
@@ -57,7 +63,7 @@ def run(training=True):
             train_dataset,
             batch_size=train_cfg.batch_size,
             shuffle=True,
-            num_workers=4
+            num_workers=min(8, cpu_count())
         )
 
         # === TRAINING ===
@@ -72,16 +78,20 @@ def run(training=True):
             weight_decay=train_cfg.weight_decay
         )
 
-        # === SAVE MODEL ===
-        torch.save(model._orig_mod.state_dict(), train_cfg.model_save_path)
-        print("Modello salvato")
+        # === SALVATAGGIO ROBUSTO ===
+        save_path = train_cfg.model_save_path
+        if hasattr(model, "_orig_mod"):
+            torch.save(model._orig_mod.state_dict(), save_path)
+        else:
+            torch.save(model.state_dict(), save_path)
+        print(f"✅ Modello salvato in: {save_path}")
 
     # === EVALUATION MODEL ===
     model = resnet50(
         model_cfg=model_cfg,
-        pretrained=True
+        pretrained=False  # ⚠️ Disabilitato: caricheremo da checkpoint
     )
-    model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device, weights_only=True))
+    model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device))
     model = model.to(device)
 
     # === EMBEDDING EXTRACTION ===
@@ -92,7 +102,16 @@ def run(training=True):
     results = compute_results(query_df, gallery_df, metric="euclidean")
 
     # === EVALUATION ===
-    evaluation(results, "data_example_rota/query_to_gallery_mapping.json")
+    evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
+
+    # === VISUALIZZAZIONE ===
+    show_image_results(
+        results,
+        top_k=3,
+        max_queries=5,
+        base_query_dir=data_cfg.query_data_root,
+        base_gallery_dir=data_cfg.gallery_data_root
+    )
 
 if __name__ == "__main__":
-    run(training=True)
+    run(training=False)
