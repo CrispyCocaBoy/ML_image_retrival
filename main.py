@@ -37,7 +37,7 @@ def run(training=True):
 
     if training:
         # === MINING MODEL (solo per costruire triplette) ===
-        mining_model = resnet50v2(
+        mining_model = resnet50(
             model_cfg=model_cfg,
             pretrained=True).to(device)
         mining_model.eval()
@@ -97,7 +97,7 @@ def run(training=True):
     else:
         device = torch.device("cpu")
     print(f"Using device: {device}")
-    model = resnet50v2(
+    model = resnet50(
         model_cfg=model_cfg,
         pretrained=False)
     model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device))
