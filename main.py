@@ -1,5 +1,8 @@
+import torch
+from multiprocessing import cpu_count
+
 from src.data_loading import retrival_data_loading
-from src.model import resnet50
+from src.model import build_model
 from src.training_loop import training_loop
 from src.embedding import extract_embeddings
 from src.results import compute_results
@@ -7,15 +10,19 @@ from src.evaluation import evaluation
 from src.triplet_dataset import TripletDataset
 from src.show_images import show_image_results
 from config import DataConfig, ModelConfig, TrainingConfig
-from multiprocessing import cpu_count
-import torch
 
 def run(training=True):
     model_cfg = ModelConfig()
     train_cfg = TrainingConfig()
     data_cfg = DataConfig()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # === DEVICE ===
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif hasattr(torch.backends, "mps"):
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"Using device: {device}")
 
     # === DATA LOADING ===
@@ -30,28 +37,23 @@ def run(training=True):
     print("Query images:", len(query_loader.dataset))
     print("Gallery images:", len(gallery_loader.dataset))
 
+    # === TRAINING ===
     if training:
-        # === MINING MODEL (solo per costruire triplette) ===
-        mining_model = resnet50(
-            model_cfg=model_cfg,
-            pretrained=True
-        ).to(device)
+        # Mining model usato per costruire le triplette
+        mining_model = build_model(model_cfg, pretrained=True).to(device)
         mining_model.eval()
 
-        # === TRAINING MODEL ===
-        model = resnet50(
-            model_cfg=model_cfg,
-            pretrained=True  # ok, partiamo da pesi ImageNet
-        ).to(device)
+        # Modello effettivo da allenare
+        model = build_model(model_cfg, pretrained=True).to(device)
 
-        # ⚠️ Compilazione opzionale
+        # Opzionale: torch.compile()
         if train_cfg.compiled:
             try:
                 model = torch.compile(model, backend="aot_eager")
             except Exception as e:
-                print("⚠️ torch.compile fallita, continuo senza compilazione:", e)
+                print("⚠️ torch.compile fallita:", e)
 
-        # === TRIPLET DATASET ===
+        # TripletDataset
         train_dataset = TripletDataset(
             image_folder_dataset=base_train_loader.dataset,
             mining_strategy=train_cfg.mining_strategy,
@@ -66,7 +68,7 @@ def run(training=True):
             num_workers=min(8, cpu_count())
         )
 
-        # === TRAINING ===
+        # Loop di training
         training_loop(
             train_loader=train_loader,
             model=model,
@@ -78,33 +80,23 @@ def run(training=True):
             weight_decay=train_cfg.weight_decay
         )
 
-        # === SALVATAGGIO ROBUSTO ===
+        # Salvataggio del modello
         save_path = train_cfg.model_save_path
-        if hasattr(model, "_orig_mod"):
-            torch.save(model._orig_mod.state_dict(), save_path)
-        else:
-            torch.save(model.state_dict(), save_path)
+        torch.save(getattr(model, "_orig_mod", model).state_dict(), save_path)
         print(f"✅ Modello salvato in: {save_path}")
 
-    # === EVALUATION MODEL ===
-    model = resnet50(
-        model_cfg=model_cfg,
-        pretrained=False  # ⚠️ Disabilitato: caricheremo da checkpoint
-    )
+    # === EVALUATION ===
+    model = build_model(model_cfg, pretrained=False).to(device)
     model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device))
-    model = model.to(device)
 
-    # === EMBEDDING EXTRACTION ===
     query_df = extract_embeddings(query_loader, model, device)
     gallery_df = extract_embeddings(gallery_loader, model, device)
 
-    # === COMPUTE RESULTS ===
-    results = compute_results(query_df, gallery_df, metric="euclidean")
-
-    # === EVALUATION ===
+    # Compute e Evaluate
+    results = compute_results(query_df, gallery_df, metric=train_cfg.distance_metric)
     evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
 
-    # === VISUALIZZAZIONE ===
+    # Visualizzazione dei risultati
     show_image_results(
         results,
         top_k=3,
@@ -114,4 +106,4 @@ def run(training=True):
     )
 
 if __name__ == "__main__":
-    run(training=False)
+    run(training=True)
