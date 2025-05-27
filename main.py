@@ -1,5 +1,4 @@
 from src.data_loading import retrival_data_loading
-from src.model import resnet50
 from src.training_loop import training_loop
 from src.embedding import extract_embeddings
 from src.results import compute_results
@@ -8,12 +7,15 @@ from src.triplet_dataset import TripletDataset
 from src.show_images import show_image_results
 from config import DataConfig, ModelConfig, TrainingConfig
 from multiprocessing import cpu_count
+from torchvision import models
+from src.my_models import EmbeddingNet
 import torch
+import torch.nn as nn
 
 def run(training=True):
-    model_cfg = ModelConfig()
-    train_cfg = TrainingConfig()
-    data_cfg = DataConfig()
+    model_cfg = ModelConfig() # hyperparameters for the model (e.g., embedding dim, dropout)
+    train_cfg = TrainingConfig() 
+    data_cfg = DataConfig() # dataset path
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -25,31 +27,45 @@ def run(training=True):
         gallery_data_root=data_cfg.gallery_data_root,
         batch_size=train_cfg.batch_size
     )
-    print("Loaders pronti!")
+    print("Loaders ready!")
     print("Train batches (base):", len(base_train_loader))
     print("Query images:", len(query_loader.dataset))
     print("Gallery images:", len(gallery_loader.dataset))
 
     if training:
-        # === MINING MODEL (solo per costruire triplette) ===
-        mining_model = resnet50(
-            model_cfg=model_cfg,
-            pretrained=True
+        # === MINING MODEL (just to build triplets) ===
+        #You don’t want to mine triplets using a randomly initialized or mid-training model — you want to use a reasonably good feature extractor (like ResNet50 pretrained on ImageNet
+
+        # --- Backbone setup ---
+        resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+        resnet_backbone = nn.Sequential(*list(resnet.children())[:-1])
+
+        mining_model = EmbeddingNet(
+            backbone=resnet_backbone,
+            feature_dim=2048,
+            embedding_dim=model_cfg.embedding_dim,
+            dropout=model_cfg.dropout,
+            batch_norm=model_cfg.batch_norm,
+            freeze_backbone=model_cfg.freeze_backbone
         ).to(device)
-        mining_model.eval()
 
         # === TRAINING MODEL ===
-        model = resnet50(
-            model_cfg=model_cfg,
-            pretrained=True  # ok, partiamo da pesi ImageNet
+        # Create the embedding model
+        model = EmbeddingNet(
+            backbone=resnet_backbone,
+            feature_dim=2048,  # this is resnet.fc.in_features
+            embedding_dim=model_cfg.embedding_dim,
+            dropout=model_cfg.dropout,
+            batch_norm=model_cfg.batch_norm,
+            freeze_backbone=model_cfg.freeze_backbone
         ).to(device)
 
-        # ⚠️ Compilazione opzionale
+        # ⚠️ Optional torch  compilation
         if train_cfg.compiled:
             try:
                 model = torch.compile(model, backend="aot_eager")
             except Exception as e:
-                print("⚠️ torch.compile fallita, continuo senza compilazione:", e)
+                print("⚠️ torch.compile failed, going on without compilation:", e)
 
         # === TRIPLET DATASET ===
         train_dataset = TripletDataset(
@@ -78,7 +94,7 @@ def run(training=True):
             weight_decay=train_cfg.weight_decay
         )
 
-        # === SALVATAGGIO ROBUSTO ===
+        # === ROBUST SAVING ===
         save_path = train_cfg.model_save_path
         if hasattr(model, "_orig_mod"):
             torch.save(model._orig_mod.state_dict(), save_path)
@@ -87,10 +103,14 @@ def run(training=True):
         print(f"✅ Modello salvato in: {save_path}")
 
     # === EVALUATION MODEL ===
-    model = resnet50(
-        model_cfg=model_cfg,
-        pretrained=False  # ⚠️ Disabilitato: caricheremo da checkpoint
-    )
+    model = EmbeddingNet(
+        backbone=resnet_backbone,
+        feature_dim=2048,
+        embedding_dim=model_cfg.embedding_dim,
+        dropout=model_cfg.dropout,
+        batch_norm=model_cfg.batch_norm,
+        freeze_backbone=model_cfg.freeze_backbone
+    ).to(device)
     model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device))
     model = model.to(device)
 
@@ -105,13 +125,13 @@ def run(training=True):
     evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
 
     # === VISUALIZZAZIONE ===
-    show_image_results(
-        results,
-        top_k=3,
-        max_queries=5,
-        base_query_dir=data_cfg.query_data_root,
-        base_gallery_dir=data_cfg.gallery_data_root
-    )
+    # show_image_results(
+    #     results,
+    #     top_k=3,
+    #     max_queries=5,
+    #     base_query_dir=data_cfg.query_data_root,
+    #     base_gallery_dir=data_cfg.gallery_data_root
+    # )
 
 if __name__ == "__main__":
-    run(training=False)
+    run(training=True) # training controls whether the model is trained or just evaluated

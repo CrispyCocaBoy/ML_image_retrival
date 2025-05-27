@@ -84,7 +84,7 @@ class TripletDataset(Dataset):
                 negative_path = random.choice(self.class_to_paths[negative_cls])
 
         else:
-            raise ValueError(f"Strategia non riconosciuta: {self.mining_strategy}")
+            raise ValueError(f"Strategy not recognized: {self.mining_strategy}")
 
         positive_img = self.load_img(positive_path)
         negative_img = self.load_img(negative_path)
