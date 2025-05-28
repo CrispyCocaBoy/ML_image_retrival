@@ -5,6 +5,7 @@ class DataConfig:
     train_data_root: str = "data_example_animal/train"
     query_data_root: str = "data_example_animal/test/query"
     gallery_data_root: str = "data_example_animal/test/gallery"
+    ground_truth_path: str = "data_example_animal/query_to_gallery_mapping.json"
 
 @dataclass
 class ModelConfig:
@@ -21,7 +22,7 @@ class TrainingConfig:
     weight_decay: float = 0              # L2 regularization
     loss: str = "triplet"                   # Tipo di loss (triplet, contrastive, ecc.)
     margin: float = 0.2                     # Margine per triplet loss
-    epochs: int = 10                        # Numero di epoche
+    epochs: int = 25                        # Numero di epoche
     batch_size: int = 32                    # Dimensione del batch
     mining_strategy: str = "semi-hard"      # "random" o "semi-hard"
     compiled: bool = False                   # Se True, usa torch.compile

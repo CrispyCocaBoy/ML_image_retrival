@@ -1,16 +1,16 @@
 from src.data_loading import retrival_data_loading
-from src.model import resnet50, resnet50v2, resnet50v3
+from src.model import resnet50, resnet50v2, resnet50v3, clipper
 from src.training_loop import training_loop
 from src.embedding import extract_embeddings
 from src.results import compute_results
 from src.evaluation import evaluation
 from src.triplet_dataset import TripletDataset
-from src.show_images import show_image_results
+from src.training_loop_early_stop import *
 from config import DataConfig, ModelConfig, TrainingConfig
 from multiprocessing import cpu_count
 import torch
 
-MML_model = resnet50v3
+MML_model = resnet50v3  # Change index to select model, e.g., resnet50v2, resnet50, clipper
 
 def run(training=True):
     model_cfg = ModelConfig()
@@ -49,12 +49,12 @@ def run(training=True):
             model_cfg=model_cfg,
             pretrained=True ).to(device)
 
-        # ⚠️ Compilazione opzionale
+        # Compilazione opzionale
         if train_cfg.compiled:
             try:
                 model = torch.compile(model, backend="aot_eager")
             except Exception as e:
-                print("⚠️ torch.compile fallita, continuo senza compilazione:", e)
+                print("torch.compile fallita, continuo senza compilazione:", e)
 
         # === TRIPLET DATASET ===
         train_dataset = TripletDataset(
@@ -75,12 +75,12 @@ def run(training=True):
         training_loop(
             train_loader=train_loader,
             model=model,
-            optimizer_type=train_cfg.optimizer,
+            query_loader=query_loader,
+            gallery_loader=gallery_loader,
+            ground_truth_path=DataConfig.ground_truth_path,
+            early_stopping_patience=5,
+            model_save_path=TrainingConfig.model_save_path,
             epochs=train_cfg.epochs,
-            loss=train_cfg.loss,
-            lr=train_cfg.learning_rate,
-            margin=train_cfg.margin,
-            weight_decay=train_cfg.weight_decay
         )
 
         # === SALVATAGGIO ROBUSTO ===
@@ -89,7 +89,7 @@ def run(training=True):
             torch.save(model._orig_mod.state_dict(), save_path)
         else:
             torch.save(model.state_dict(), save_path)
-        print(f"✅ Modello salvato in: {save_path}")
+        print(f"Modello salvato in: {save_path}")
 
     # === EVALUATION MODEL ===
     if torch.cuda.is_available():

@@ -39,7 +39,7 @@ def training_loop(train_loader,
         total_pos_dist = 0.0
         total_neg_dist = 0.0
 
-        pbar = tqdm(train_loader, desc=f"🚀 Epoch {epoch+1}/{epochs}")
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
         for anchors, positives, negatives in pbar:
             anchors = anchors.to(device)
             positives = positives.to(device)
@@ -66,9 +66,9 @@ def training_loop(train_loader,
         avg_pos = total_pos_dist / len(train_loader)
         avg_neg = total_neg_dist / len(train_loader)
 
-        tqdm.write(f"✅ Epoch {epoch+1} completed - Avg Loss: {avg_loss:.4f} | D(ap): {avg_pos:.4f} | D(an): {avg_neg:.4f}")
+        tqdm.write(f"Epoch {epoch+1} completed - Avg Loss: {avg_loss:.4f} | D(ap): {avg_pos:.4f} | D(an): {avg_neg:.4f}")
 
         # Refresh embedding cache, if the dataset supports it
         if hasattr(train_loader.dataset, "refresh_embeddings"):
-            tqdm.write("🔄 Aggiornamento embeddings nel dataset...")
+            tqdm.write("Aggiornamento embeddings nel dataset...")
             train_loader.dataset.refresh_embeddings(model)
