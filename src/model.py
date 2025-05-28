@@ -114,3 +114,74 @@ def resnet50v2(model_cfg, pretrained=True):
         batch_norm=model_cfg.batch_norm,
         freeze_backbone=model_cfg.freeze_backbone
     )
+
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+from torchvision.models import ResNet50_Weights
+
+# GeM Pooling
+class GeM2(nn.Module):
+    def __init__(self, p=3.0, eps=1e-6):
+        super().__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x):
+        return F.adaptive_avg_pool2d(
+            x.clamp(min=self.eps).pow(self.p),
+            (1, 1)
+        ).pow(1.0 / self.p).squeeze(-1).squeeze(-1)
+
+# Embedder migliorato
+class ResNetEmbedderV3(nn.Module):
+    def __init__(self, embedding_dim=128, freeze_backbone=False):
+        super().__init__()
+
+        # Backbone
+        self.backbone = models.resnet50(weights=ResNet50_Weights.DEFAULT)
+        self.backbone.avgpool = nn.Identity()
+        self.backbone.fc = nn.Identity()
+
+        # GeM Pooling
+        self.gem = GeM2()
+
+        # Freezing
+        if freeze_backbone:
+            for name, param in self.backbone.named_parameters():
+                if not name.startswith("layer4"):
+                    param.requires_grad = False
+
+        # Testa embedding migliorata
+        self.embedding = nn.Sequential(
+            nn.Linear(2048, 512, bias=False),
+            nn.BatchNorm1d(512),
+            nn.PReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, embedding_dim, bias=False),
+            nn.BatchNorm1d(embedding_dim)
+        )
+
+    def forward(self, x):
+        x = self.backbone.conv1(x)
+        x = self.backbone.bn1(x)
+        x = self.backbone.relu(x)
+        x = self.backbone.maxpool(x)
+        x = self.backbone.layer1(x)
+        x = self.backbone.layer2(x)
+        x = self.backbone.layer3(x)
+        x = self.backbone.layer4(x)
+
+        x = self.gem(x)
+        x = self.embedding(x)
+        x = F.normalize(x, p=2, dim=1)
+        return x
+def resnet50v3(model_cfg, pretrained=True):
+    return EmbeddingNet(
+        embedding_dim=model_cfg.embedding_dim,
+        dropout=model_cfg.dropout,
+        batch_norm=model_cfg.batch_norm,
+        freeze_backbone=model_cfg.freeze_backbone
+    )
