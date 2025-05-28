@@ -2,6 +2,7 @@ import torch.nn as nn
 from torchvision import models
 import torch.nn.functional as F
 import torch
+from torchvision.models import convnext_small, ConvNeXt_Small_Weights
 
 class EmbeddingNet(nn.Module):
     def __init__(self, backbone, feature_dim, embedding_dim=128, dropout=0.0, batch_norm=True, freeze_backbone=False):
@@ -43,7 +44,7 @@ def build_model(model_cfg, pretrained=True):
         )
         feature_dim = base.classifier[1].in_features  # 1280
     
-    elif model_name == "convnext_small":
+    elif model_cfg.backbone_type == "convnext_small":
         base = convnext_small(weights=ConvNeXt_Small_Weights.IMAGENET1K_V1 if pretrained else None)
         backbone = nn.Sequential(*list(base.children())[:-1])
         feature_dim = 768
