@@ -37,7 +37,7 @@ def run(training=True):
 
     if training:
         # === MINING MODEL (solo per costruire triplette) ===
-        mining_model = resnet50(
+        mining_model = resnet50v2(
             model_cfg=model_cfg,
             pretrained=True).to(device)
         mining_model.eval()
