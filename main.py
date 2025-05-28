@@ -123,5 +123,5 @@ def run(training=True):
     )
 '''
 if __name__ == "__main__":
-    run(training=True)
+    run(training=False)
 
