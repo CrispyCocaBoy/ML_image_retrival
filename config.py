@@ -25,4 +25,4 @@ class TrainingConfig:
     batch_size: int = 32                    # Dimensione del batch
     mining_strategy: str = "semi-hard"      # "random" o "semi-hard"
     compiled: bool = False                   # Se True, usa torch.compile
-    model_save_path: str = "model_repository/resnet_triplet.pth"  # Dove salvare il modello
+    model_save_path: str = "model_repository/modello_attule.pth"  # Dove salvare il modello

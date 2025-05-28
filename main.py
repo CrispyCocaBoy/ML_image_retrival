@@ -1,5 +1,5 @@
 from src.data_loading import retrival_data_loading
-from src.model import resnet50, resnet50v2
+from src.model import resnet50, resnet50v2, resnet50v3
 from src.training_loop import training_loop
 from src.embedding import extract_embeddings
 from src.results import compute_results
@@ -9,6 +9,8 @@ from src.show_images import show_image_results
 from config import DataConfig, ModelConfig, TrainingConfig
 from multiprocessing import cpu_count
 import torch
+
+MML_model = resnet50v3
 
 def run(training=True):
     model_cfg = ModelConfig()
@@ -37,13 +39,13 @@ def run(training=True):
 
     if training:
         # === MINING MODEL (solo per costruire triplette) ===
-        mining_model = resnet50v2(
+        mining_model = MML_model(
             model_cfg=model_cfg,
             pretrained=True).to(device)
         mining_model.eval()
 
         # === TRAINING MODEL ===
-        model = resnet50v2(
+        model = MML_model(
             model_cfg=model_cfg,
             pretrained=True ).to(device)
 
@@ -97,7 +99,7 @@ def run(training=True):
     else:
         device = torch.device("cpu")
     print(f"Using device: {device}")
-    model = resnet50(
+    model = MML_model(
         model_cfg=model_cfg,
         pretrained=False)
     model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device))
@@ -123,5 +125,5 @@ def run(training=True):
     )
 '''
 if __name__ == "__main__":
-    run(training=False)
+    run(training=True)  # Set to False to skip training and only evaluate
 

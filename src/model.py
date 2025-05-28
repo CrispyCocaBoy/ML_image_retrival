@@ -108,7 +108,7 @@ class ResNetEmbedderV2(nn.Module):
 
 # Funzione per costruire il modello
 def resnet50v2(model_cfg, pretrained=True):
-    return EmbeddingNet(
+    return ResNetEmbedderV2(
         embedding_dim=model_cfg.embedding_dim,
         dropout=model_cfg.dropout,
         batch_norm=model_cfg.batch_norm,
@@ -179,9 +179,51 @@ class ResNetEmbedderV3(nn.Module):
         x = F.normalize(x, p=2, dim=1)
         return x
 def resnet50v3(model_cfg, pretrained=True):
-    return EmbeddingNet(
+    return ResNetEmbedderV3(
         embedding_dim=model_cfg.embedding_dim,
-        dropout=model_cfg.dropout,
-        batch_norm=model_cfg.batch_norm,
+        freeze_backbone=model_cfg.freeze_backbone
+    )
+
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from transformers import CLIPModel, CLIPProcessor
+
+class CLIPEmbedder(nn.Module):
+    def __init__(self, embedding_dim=128, freeze_backbone=True):
+        super().__init__()
+
+        # 1. Carica modello CLIP
+        self.clip = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+
+        # 2. Estrae solo il visual encoder
+        self.visual = self.clip.vision_model
+
+        # 3. Freezing opzionale del backbone
+        if freeze_backbone:
+            for param in self.visual.parameters():
+                param.requires_grad = False
+
+        # 4. Proietta l'output (dim 768) nello spazio embedding desiderato
+        self.embedding = nn.Sequential(
+            nn.Linear(768, 512, bias=False),
+            nn.BatchNorm1d(512),
+            nn.PReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, embedding_dim, bias=False),
+            nn.BatchNorm1d(embedding_dim)
+        )
+
+    def forward(self, pixel_values):
+        # pixel_values: immagini preprocessate (B, 3, 224, 224)
+        x = self.visual(pixel_values).pooler_output  # (B, 768)
+        x = self.embedding(x)                         # (B, embedding_dim)
+        x = F.normalize(x, p=2, dim=1)                # L2 normalize
+        return x
+
+def clipper(model_cfg, pretrained=True):
+    return CLIPEmbedder(
+        embedding_dim=model_cfg.embedding_dim,
         freeze_backbone=model_cfg.freeze_backbone
     )
