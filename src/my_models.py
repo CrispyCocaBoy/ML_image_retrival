@@ -1,4 +1,5 @@
 import torch.nn as nn
+from torchvision import models
 import torch.nn.functional as F
 import torch
 
@@ -27,8 +28,32 @@ class EmbeddingNet(nn.Module):
         embeddings = self.head(features)                # Shape: (B, embedding_dim)
         return F.normalize(embeddings, p=2, dim=1)
     
-def resnet50(model_cfg, pretrained=True):
+def build_model(model_cfg, pretrained=True):
+    if model_cfg.backbone_type == "resnet50":
+        base = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None)
+        backbone = nn.Sequential(*list(base.children())[:-1])
+        feature_dim = 2048
+
+    elif model_cfg.backbone_type == "efficientnet_b0":
+        base = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT if pretrained else None)
+        backbone = nn.Sequential(
+            base.features,
+            base.avgpool,
+            nn.Flatten()
+        )
+        feature_dim = base.classifier[1].in_features  # 1280
+    
+    elif model_name == "convnext_small":
+        base = convnext_small(weights=ConvNeXt_Small_Weights.IMAGENET1K_V1 if pretrained else None)
+        backbone = nn.Sequential(*list(base.children())[:-1])
+        feature_dim = 768
+
+    else:
+        raise ValueError(f"Unsupported model")
+
     return EmbeddingNet(
+        backbone=backbone,
+        feature_dim=feature_dim,
         embedding_dim=model_cfg.embedding_dim,
         dropout=model_cfg.dropout,
         batch_norm=model_cfg.batch_norm,

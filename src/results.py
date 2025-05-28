@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 
-def compute_results(query_df, gallery_df, top_k=3, metric="euclidean"):
+def compute_results(query_df, gallery_df, top_k=10, metric="euclidean"):
     """
     Restituisce lista di dizionari con formato:
     [
@@ -18,7 +18,7 @@ def compute_results(query_df, gallery_df, top_k=3, metric="euclidean"):
 
     distances = cdist(query_embeddings, gallery_embeddings, metric=metric)
 
-    results = []
+    results = {}
 
     for i, query_row in query_df.iterrows():
         query_path = query_row["filename"]  # full path o path relativo
@@ -26,9 +26,6 @@ def compute_results(query_df, gallery_df, top_k=3, metric="euclidean"):
         top_indices = np.argsort(dist_row)[:top_k]
         gallery_paths = gallery_df.iloc[top_indices]["filename"].tolist()
 
-        results.append({
-            "filename": query_path,
-            "gallery_images": gallery_paths
-        })
+        results[query_path] = gallery_paths
 
     return results

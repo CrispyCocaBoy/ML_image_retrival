@@ -86,4 +86,4 @@ def prepare_dataset(base_dir, query_per_class=1, gt_per_query=5, gallery_pct=0.8
 
 # Usa lo script
 if __name__ == "__main__":
-    prepare_dataset("data_example")
+    prepare_dataset("data_example_animal")

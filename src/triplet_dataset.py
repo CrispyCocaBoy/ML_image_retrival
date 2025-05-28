@@ -25,7 +25,7 @@ class TripletDataset(Dataset):
             self.data.append((class_name, path))
 
         if self.cache_images:
-            print("⏳ Caching immagini in memoria...")
+            print("⏳ Caching images in memory...")
             for _, path in self.data:
                 try:
                     img = Image.open(path).convert("RGB")

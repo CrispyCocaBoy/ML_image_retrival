@@ -70,5 +70,5 @@ def training_loop(train_loader,
 
         # Refresh embedding cache, if the dataset supports it
         if hasattr(train_loader.dataset, "refresh_embeddings"):
-            tqdm.write("🔄 Aggiornamento embeddings nel dataset...")
+            tqdm.write("🔄 Updating embeddings...")
             train_loader.dataset.refresh_embeddings(model)

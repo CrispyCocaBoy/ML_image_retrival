@@ -8,7 +8,7 @@ from src.show_images import show_image_results
 from config import DataConfig, ModelConfig, TrainingConfig
 from multiprocessing import cpu_count
 from torchvision import models
-from src.my_models import EmbeddingNet
+from src.my_models import EmbeddingNet, build_model
 import torch
 import torch.nn as nn
 
@@ -37,28 +37,12 @@ def run(training=True):
         #You don’t want to mine triplets using a randomly initialized or mid-training model — you want to use a reasonably good feature extractor (like ResNet50 pretrained on ImageNet
 
         # --- Backbone setup ---
-        resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
-        resnet_backbone = nn.Sequential(*list(resnet.children())[:-1])
+        mining_model = build_model(model_cfg, pretrained=True).to(device)
 
-        mining_model = EmbeddingNet(
-            backbone=resnet_backbone,
-            feature_dim=2048,
-            embedding_dim=model_cfg.embedding_dim,
-            dropout=model_cfg.dropout,
-            batch_norm=model_cfg.batch_norm,
-            freeze_backbone=model_cfg.freeze_backbone
-        ).to(device)
 
         # === TRAINING MODEL ===
         # Create the embedding model
-        model = EmbeddingNet(
-            backbone=resnet_backbone,
-            feature_dim=2048,  # this is resnet.fc.in_features
-            embedding_dim=model_cfg.embedding_dim,
-            dropout=model_cfg.dropout,
-            batch_norm=model_cfg.batch_norm,
-            freeze_backbone=model_cfg.freeze_backbone
-        ).to(device)
+        model = build_model(model_cfg, pretrained=True).to(device)
 
         # ⚠️ Optional torch  compilation
         if train_cfg.compiled:
@@ -102,27 +86,22 @@ def run(training=True):
             torch.save(model.state_dict(), save_path)
         print(f"✅ Modello salvato in: {save_path}")
 
+
     # === EVALUATION MODEL ===
-    model = EmbeddingNet(
-        backbone=resnet_backbone,
-        feature_dim=2048,
-        embedding_dim=model_cfg.embedding_dim,
-        dropout=model_cfg.dropout,
-        batch_norm=model_cfg.batch_norm,
-        freeze_backbone=model_cfg.freeze_backbone
-    ).to(device)
-    model.load_state_dict(torch.load(train_cfg.model_save_path, map_location=device))
-    model = model.to(device)
+    model = build_model(model_cfg, pretrained=True).to(device)
 
     # === EMBEDDING EXTRACTION ===
+    print(f"Extracting embeddings:")
     query_df = extract_embeddings(query_loader, model, device)
     gallery_df = extract_embeddings(gallery_loader, model, device)
 
     # === COMPUTE RESULTS ===
+    print("Computing results:")
     results = compute_results(query_df, gallery_df, metric="euclidean")
+    print(results)
 
     # === EVALUATION ===
-    evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
+    #evaluation(results, "data_example_animal/query_to_gallery_mapping.json")
 
     # === VISUALIZZAZIONE ===
     # show_image_results(
