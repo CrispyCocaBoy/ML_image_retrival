@@ -15,7 +15,7 @@ def get_top_k(query_embeds, gallery_embeds, gallery_paths, query_paths, k=10, di
     for i, query in enumerate(query_embeds):
         if distance == "cosine":
             dists = 1 - F.cosine_similarity(gallery_embeds, query.unsqueeze(0))
-        elif distance == "l2":
+        elif distance == "euclidean":
             dists = torch.norm(gallery_embeds - query, dim=1)
         else:
             raise ValueError(f"Unsupported distance metric: {distance}")
