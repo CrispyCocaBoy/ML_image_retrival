@@ -27,7 +27,8 @@ def main():
         gallery_embeds=gallery_embeddings,
         gallery_paths=gallery_paths,
         query_paths=query_paths,
-        k=10
+        k=10,
+        distance=config.distance_metric
     )
 
     # 5. Salva i risultati
