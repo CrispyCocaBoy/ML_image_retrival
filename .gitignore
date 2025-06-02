@@ -2,4 +2,5 @@
 .venv
 .appunti
 .DS_store
-_pycache_
+__pycache__
+src/__pycache__
