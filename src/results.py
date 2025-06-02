@@ -1,34 +1,18 @@
-import numpy as np
-from scipy.spatial.distance import cdist
+import os
+import torch
+from PIL import Image
 
-def compute_results(query_df, gallery_df, top_k=3, metric="euclidean"):
-    """
-    Restituisce lista di dizionari con formato:
-    [
-      {
-        "filename": <query image path>,
-        "gallery_images": [<gallery path 1>, <gallery path 2>, ...]
-      },
-      ...
-    ]
-    """
+def load_images_from_folder(folder, transform):
+    paths = [os.path.join(folder, fname) for fname in os.listdir(folder)
+             if fname.lower().endswith((".jpg", ".jpeg", ".png"))]
+    data = [(path, transform(Image.open(path).convert("RGB"))) for path in paths]
+    return paths, torch.stack([img for _, img in data])
 
-    query_embeddings = np.stack(query_df['embedding'].to_numpy())
-    gallery_embeddings = np.stack(gallery_df['embedding'].to_numpy())
-
-    distances = cdist(query_embeddings, gallery_embeddings, metric=metric)
-
-    results = []
-
-    for i, query_row in query_df.iterrows():
-        query_path = query_row["filename"]  # full path o path relativo
-        dist_row = distances[i]
-        top_indices = np.argsort(dist_row)[:top_k]
-        gallery_paths = gallery_df.iloc[top_indices]["filename"].tolist()
-
-        results.append({
-            "filename": query_path,
-            "gallery_images": gallery_paths
-        })
-
+def get_top_k(query_embeds, gallery_embeds, gallery_paths, query_paths, k=10):
+    results = {}
+    for i, query in enumerate(query_embeds):
+        dists = torch.norm(gallery_embeds - query, dim=1)  # L2 distance
+        topk = torch.topk(dists, k=k, largest=False)
+        similar_images = [os.path.basename(gallery_paths[j]) for j in topk.indices]
+        results[os.path.basename(query_paths[i])] = similar_images
     return results
