@@ -21,9 +21,9 @@ def run(training=True):
 
     # === DATA LOADING ===
     base_train_loader, query_loader, gallery_loader = retrival_data_loading(
-        train_data_root="data_competition/train",
-        query_data_root="data_competition/test/query",
-        gallery_data_root= "data_competition/test/gallery",
+        train_data_root="data/train",
+        query_data_root="data/test/query",
+        gallery_data_root= "data/test/gallery",
         batch_size= 2
     )
     print("Loaders pronti!")
@@ -45,9 +45,9 @@ def run(training=True):
 
         # === TRIPLET DATASET ===
         train_loader, query_loader, gallery_loader = retrival_data_loading(
-            train_data_root="data_example_rota/train",
-            query_data_root="data_example_rota/test/query",
-            gallery_data_root= "data_example_rota/test/gallery",
+            train_data_root="data/train",
+            query_data_root="data/test/query",
+            gallery_data_root= "data/test/gallery",
             batch_size= 2)
 
         # === TRAINING ===
