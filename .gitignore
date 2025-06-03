@@ -5,7 +5,7 @@
 .DS_store
 __pycache__
 src/__pycache__
-
+*.jpg
 *.jpeg
 *.png
 *.pth
