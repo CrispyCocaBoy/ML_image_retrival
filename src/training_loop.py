@@ -75,8 +75,8 @@ def train_siamese(
             label = label.to(device, non_blocking=True)
             
             # Forward pass
-            output = model(img1, img2)
-            loss = criterion(output, label)
+            output1, output2 = model(img1, img2)
+            loss = criterion(output1, output2, label)
             
             # Backward pass and optimize
             optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()

@@ -5,8 +5,7 @@ import torch.nn.functional as F
 from torchvision import models
 
 class SiameseNetwork(nn.Module):
-    def __init__(self, backbone="resnet50", distance_metric="cosine"):
-        self.distance_metric = distance_metric
+    def __init__(self, backbone="resnet50"):
         '''
         Creates a siamese network with a network from torchvision.models as backbone.
 
@@ -94,15 +93,8 @@ class SiameseNetwork(nn.Module):
         feat1 = self.embedding(feat1)
         feat2 = self.embedding(feat2)
 
-         # Calculate the distance between the two feature vectors
-        if self.distance_metric == "cosine":
-            distance = F.cosine_similarity(feat1, feat2, dim=1)
-        elif self.distance_metric == "euclidean":
-            distance = F.pairwise_distance(feat1, feat2, p=2)
-        else:
-            raise ValueError("Invalid distance metric. Please choose from 'cosine' or 'euclidean'.")
         
-        return distance
+        return feat1, feat2
     
 
 
