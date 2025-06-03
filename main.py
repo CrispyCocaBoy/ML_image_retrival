@@ -56,9 +56,9 @@ def run(training=True):
             train_loader=train_loader,
             val_loader=None,
             optimizer_type="adam",
-            learning_rate=0.1,
+            learning_rate=0.01,
             weight_decay=1e-4,
-            epochs=2,
+            epochs=1,
         )
 
         # === SALVATAGGIO ROBUSTO ===
