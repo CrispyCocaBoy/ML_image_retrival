@@ -6,6 +6,9 @@ from src.training_loop import train_siamese
 from src.evaluation import evaluate_siamese
 from src.submit_api import submit
 
+train_data_root="data/train"
+query_data_root="data/test/query"
+gallery_data_root= "data/test/gallery"
 
 
 
@@ -21,9 +24,9 @@ def run(training=True):
 
     # === DATA LOADING ===
     base_train_loader, query_loader, gallery_loader = retrival_data_loading(
-        train_data_root="data/train",
-        query_data_root="data/test/query",
-        gallery_data_root= "data/test/gallery",
+        train_data_root=train_data_root,
+        query_data_root=query_data_root,
+        gallery_data_root= gallery_data_root,
         batch_size= 2
     )
     print("Loaders pronti!")
@@ -45,9 +48,9 @@ def run(training=True):
 
         # === TRIPLET DATASET ===
         train_loader, query_loader, gallery_loader = retrival_data_loading(
-            train_data_root="data/train",
-            query_data_root="data/test/query",
-            gallery_data_root= "data/test/gallery",
+            train_data_root=train_data_root,
+            query_data_root=query_data_root,
+            gallery_data_root= gallery_data_root,
             batch_size= 2)
 
         # === TRAINING ===
