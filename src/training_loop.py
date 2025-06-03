@@ -5,6 +5,7 @@ from tqdm import tqdm
 import os
 from pathlib import Path
 from .loss import ContrastiveLoss
+from torch.cuda.amp import autocast, GradScaler
 
 def train_siamese(
     model,
@@ -17,10 +18,11 @@ def train_siamese(
     margin=2.0,
     device="cuda" if torch.cuda.is_available() else "cpu",
     save_dir="model_repository",
-    model_name="siamese_model"
+    model_name="siamese_model",
+    gradient_accumulation_steps=1
 ):
     """
-    Training loop for Siamese Network.
+    Training loop for Siamese Network with optimizations.
     
     Args:
         model: Siamese network model
@@ -34,6 +36,7 @@ def train_siamese(
         device: Device to train on ("cuda" or "cpu")
         save_dir: Directory to save model checkpoints
         model_name: Base name for saved model files
+        gradient_accumulation_steps: Number of steps to accumulate gradients before updating weights
     """
     
     # Move model to device
@@ -55,6 +58,9 @@ def train_siamese(
         optimizer, mode='min', factor=0.1, patience=2,
     )
     
+    # Initialize gradient scaler for mixed precision
+    scaler = GradScaler()
+    
     # Create save directory if it doesn't exist
     save_path = Path(save_dir)
     save_path.mkdir(parents=True, exist_ok=True)
@@ -69,22 +75,31 @@ def train_siamese(
         train_steps = 0
         
         train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [Train]")
-        for img1, img2, label in train_pbar:
+        optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
+        
+        for i, (img1, img2, label) in enumerate(train_pbar):
             # Move data to device
             img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
             label = label.to(device, non_blocking=True)
             
-            # Forward pass
-            output1, output2 = model(img1, img2)
-            loss = criterion(output1, output2, label)
+            # Mixed precision training
+            with autocast():
+                # Forward pass
+                output1, output2 = model(img1, img2)
+                loss = criterion(output1, output2, label)
+                loss = loss / gradient_accumulation_steps  # Normalize loss
             
-            # Backward pass and optimize
-            optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
-            loss.backward()
-            optimizer.step()
+            # Backward pass with gradient scaling
+            scaler.scale(loss).backward()
+            
+            # Update weights if we've accumulated enough gradients
+            if (i + 1) % gradient_accumulation_steps == 0:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
             
             # Update statistics
-            train_loss += loss.item()
+            train_loss += loss.item() * gradient_accumulation_steps
             train_steps += 1
             train_pbar.set_postfix({"loss": train_loss / train_steps})
         
@@ -96,7 +111,7 @@ def train_siamese(
             val_loss = 0.0
             val_steps = 0
             
-            with torch.no_grad():
+            with torch.no_grad(), autocast():
                 val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]")
                 for img1, img2, label in val_pbar:
                     img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
@@ -122,6 +137,7 @@ def train_siamese(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': scheduler.state_dict(),
+                    'scaler_state_dict': scaler.state_dict(),
                     'train_loss': avg_train_loss,
                     'val_loss': avg_val_loss,
                 }, save_path / f"{model_name}_best.pth")
@@ -132,6 +148,7 @@ def train_siamese(
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
+            'scaler_state_dict': scaler.state_dict(),
             'train_loss': avg_train_loss,
             'val_loss': avg_val_loss if val_loader else None,
         }, save_path / f"{model_name}_epoch_{epoch+1}.pth")

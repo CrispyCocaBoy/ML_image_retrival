@@ -16,10 +16,14 @@ def run(training=True):
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        # Ottimizzazioni CUDA
+        # CUDA optimizations
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
+        # Enable channels_last memory format
+        torch.backends.cudnn.enabled = True
+        # Set optimal CUDA memory allocator
+        torch.cuda.set_per_process_memory_fraction(0.9)  # Use 90% of available memory
     elif hasattr(torch.backends, "mps"):
         device = torch.device("mps")
     else:
@@ -31,62 +35,51 @@ def run(training=True):
         train_data_root=train_data_root,
         query_data_root=query_data_root,
         gallery_data_root=gallery_data_root,
-        batch_size=64,  # Aumentato per V100
-        num_workers=6,  # Un worker per core
-        prefetch_factor=2  # Prefetch per ottimizzare il caricamento
+        batch_size=64,  # Increased for V100
+        num_workers=6,  # One worker per core
+        prefetch_factor=2  # Prefetch for optimization
     )
-    print("Loaders pronti!")
+    print("Loaders ready!")
     print("Train batches (base):", len(base_train_loader))
     print("Query images:", len(query_loader.dataset))
     print("Gallery images:", len(gallery_loader.dataset))
 
     # === MODEL ===
-    model = SiameseNetwork(backbone="resnet50").to(device)  # Usiamo ResNet18 per velocità
+    model = SiameseNetwork().to(device)
 
     # === TRAINING MODEL ===
-    if training == True:
+    model = SiameseNetwork().to(device)
 
-        # Compilation del modello
+    if training:
         try:
-            model = torch.compile(model, mode="max-autotune")  # Ottimizzazione massima
+            compiled_model = torch.compile(model, mode="max-autotune")
         except Exception as e:
-            print("torch.compile fallita, continuo senza compilazione:", e)
+            print("torch.compile failed, continuing without compilation:", e)
+            compiled_model = model
 
-        # === TRIPLET DATASET ===
-        train_loader, query_loader, gallery_loader = retrival_data_loading(
-            train_data_root=train_data_root,
-            query_data_root=query_data_root,
-            gallery_data_root=gallery_data_root,
-            batch_size=64,  # Aumentato per V100
-            num_workers=6,  # Un worker per core
-            prefetch_factor=2  # Prefetch per ottimizzare il caricamento
-        )
-
-        # === TRAINING ===
         train_siamese(
-            model=model,
-            train_loader=train_loader,
+            model=compiled_model,
+            train_loader=base_train_loader,
             val_loader=None,
             optimizer_type="adam",
             learning_rate=0.001,
             weight_decay=1e-4,
             epochs=1,
+            gradient_accumulation_steps=2
         )
 
-        # === SALVATAGGIO ROBUSTO ===
-        torch.save(model.state_dict(), "model_repository/siamese_model.pth")
-        print(f"✅ Modello salvato in: model_repository/siamese_model.pth")
-    
-    # === EVALUATION MODEL ===
-    # Recall of the model from the repository
-    model.load_state_dict(torch.load("model_repository/siamese_model.pth"))
+        # Salva modello non compilato (per usarlo poi)
+        torch.save(model.state_dict(), "model_repository/siamese_model.pth") 
+
+
+    # === EVALUATION ===
+    model.load_state_dict(torch.load("model_repository/siamese_model.pth", map_location=device))
     results = evaluate_siamese(model, query_loader, gallery_loader, device)
-    
-    # Result to server 
-    print(f"🔍 Eseguo la submit con i risultati: {results}")
+
+    print(f"🔍 Submitting results: {results}")
     res = submit(results, "Simple Guys")
-    print(f"🔍 Risultato della submit: {res}")
+    print(f"🔍 Submission result: {res}")
 
 if __name__ == "__main__":
-    run(training=True)
+    run(training=False)
 
