@@ -5,7 +5,7 @@ from torchvision.models import ResNet50_Weights
 from torchvision import models
 
 class SiameseNetwork(nn.Module):
-    def __init__(self, backbone="resnet50"):
+    def __init__(self):
         '''
         Creates a siamese network with a network from torchvision.models as backbone.
 
@@ -15,14 +15,12 @@ class SiameseNetwork(nn.Module):
 
         super().__init__()
 
-        if backbone not in models.__dict__:
-            raise Exception("No model named {} exists in torchvision.models.".format(backbone))
 
         # Create a backbone network from the pretrained models provided in torchvision.models
-        self.backbone = models.__dict__[backbone](weights=ResNet50_Weights.DEFAULT, progress=True)
+        self.backbone = models.resnet18(weights=models.ResNet18_Weights.DEFAULT, progress=True)
 
         # Freeze the backbone network
-        for param in self.backbone_full.parameters():
+        for param in self.backbone.parameters():
             param.requires_grad = False
 
         # Get the number of features that are outputted by the last layer of backbone network.
@@ -51,23 +49,13 @@ class SiameseNetwork(nn.Module):
 
         # Start to modify the model
         self.head = nn.Sequential(
-            nn.Dropout(p=0.5),
-            nn.Linear(out_features, 512),
-            nn.BatchNorm1d(512),
+            nn.Linear(out_features, 128),
             nn.ReLU(),
-
-            nn.Dropout(p=0.5),
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
-            nn.Sigmoid(),
-            nn.Dropout(p=0.5)
         )
 
 
         # Create an embedding layer to get the similarity between the two images
         self.embedding = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.ReLU(),
             nn.Linear(128, 64)
         )
 
