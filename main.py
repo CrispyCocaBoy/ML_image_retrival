@@ -16,6 +16,10 @@ def run(training=True):
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
+        # Ottimizzazioni CUDA
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
     elif hasattr(torch.backends, "mps"):
         device = torch.device("mps")
     else:
@@ -26,8 +30,10 @@ def run(training=True):
     base_train_loader, query_loader, gallery_loader = retrival_data_loading(
         train_data_root=train_data_root,
         query_data_root=query_data_root,
-        gallery_data_root= gallery_data_root,
-        batch_size= 2
+        gallery_data_root=gallery_data_root,
+        batch_size=64,  # Aumentato per V100
+        num_workers=6,  # Un worker per core
+        prefetch_factor=2  # Prefetch per ottimizzare il caricamento
     )
     print("Loaders pronti!")
     print("Train batches (base):", len(base_train_loader))
@@ -35,14 +41,14 @@ def run(training=True):
     print("Gallery images:", len(gallery_loader.dataset))
 
     # === MODEL ===
-    model = SiameseNetwork().to(device)
+    model = SiameseNetwork(backbone="resnet18").to(device)  # Usiamo ResNet18 per velocità
 
     # === TRAINING MODEL ===
     if training == True:
 
         # Compilation del modello
         try:
-            model = torch.compile(model, backend="eager")
+            model = torch.compile(model, mode="max-autotune")  # Ottimizzazione massima
         except Exception as e:
             print("torch.compile fallita, continuo senza compilazione:", e)
 
@@ -50,8 +56,11 @@ def run(training=True):
         train_loader, query_loader, gallery_loader = retrival_data_loading(
             train_data_root=train_data_root,
             query_data_root=query_data_root,
-            gallery_data_root= gallery_data_root,
-            batch_size= 2)
+            gallery_data_root=gallery_data_root,
+            batch_size=64,  # Aumentato per V100
+            num_workers=6,  # Un worker per core
+            prefetch_factor=2  # Prefetch per ottimizzare il caricamento
+        )
 
         # === TRAINING ===
         train_siamese(
@@ -59,7 +68,7 @@ def run(training=True):
             train_loader=train_loader,
             val_loader=None,
             optimizer_type="adam",
-            learning_rate=0.01,
+            learning_rate=0.001,
             weight_decay=1e-4,
             epochs=1,
         )

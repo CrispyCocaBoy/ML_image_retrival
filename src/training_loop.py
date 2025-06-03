@@ -50,6 +50,10 @@ def train_siamese(
     else:
         raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
     
+    # Learning rate scheduler
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=2, verbose=True
+    )
     
     # Create save directory if it doesn't exist
     save_path = Path(save_dir)
@@ -67,15 +71,15 @@ def train_siamese(
         train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [Train]")
         for img1, img2, label in train_pbar:
             # Move data to device
-            img1, img2 = img1.to(device), img2.to(device)
-            label = label.to(device)
+            img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
+            label = label.to(device, non_blocking=True)
             
             # Forward pass
             output1, output2 = model(img1, img2)
             loss = criterion(output1, output2, label)
             
             # Backward pass and optimize
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
             loss.backward()
             optimizer.step()
             
@@ -95,8 +99,8 @@ def train_siamese(
             with torch.no_grad():
                 val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]")
                 for img1, img2, label in val_pbar:
-                    img1, img2 = img1.to(device), img2.to(device)
-                    label = label.to(device)
+                    img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
+                    label = label.to(device, non_blocking=True)
                     
                     output1, output2 = model(img1, img2)
                     loss = criterion(output1, output2, label)
@@ -107,6 +111,9 @@ def train_siamese(
             
             avg_val_loss = val_loss / val_steps
             
+            # Update learning rate
+            scheduler.step(avg_val_loss)
+            
             # Save best model
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
@@ -114,6 +121,7 @@ def train_siamese(
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
                     'train_loss': avg_train_loss,
                     'val_loss': avg_val_loss,
                 }, save_path / f"{model_name}_best.pth")
@@ -123,6 +131,7 @@ def train_siamese(
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
             'train_loss': avg_train_loss,
             'val_loss': avg_val_loss if val_loader else None,
         }, save_path / f"{model_name}_epoch_{epoch+1}.pth")

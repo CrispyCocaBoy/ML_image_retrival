@@ -6,37 +6,58 @@ from PIL import Image
 from pathlib import Path
 import os
 import random
+from tqdm import tqdm
 
 # Dataset per query/gallery
 class TestImageDataset(Dataset):
-    def __init__(self, folder_path, transform, target_transform = None):
+    def __init__(self, folder_path, transform, target_transform=None, cache_images=True):
         self.image_paths = list(Path(folder_path).glob("*.jpg"))
         self.transform = transform
         self.target_transform = target_transform
+        self.cache_images = cache_images
+        self.image_cache = {}
+        
+        if cache_images:
+            print(f"⏳ Caching {len(self.image_paths)} immagini in memoria...")
+            for path in tqdm(self.image_paths):
+                try:
+                    img = Image.open(path).convert("RGB")
+                    self.image_cache[path] = self.transform(img)
+                except Exception as e:
+                    print(f"Errore caricando {path}: {e}")
+            print("✅ Caching immagini completato.")
 
     def __len__(self):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        img = Image.open(self.image_paths[idx]).convert("RGB")
-        img = self.transform(img)
-        label = self.image_paths[idx].name
-        return img, label
+        path = self.image_paths[idx]
+        if self.cache_images and path in self.image_cache:
+            img = self.image_cache[path]
+        else:
+            img = Image.open(path).convert("RGB")
+            img = self.transform(img)
+            if self.cache_images:
+                self.image_cache[path] = img
+        return img, path.name
 
 # Dataset per il training di Siamese Network
 class SiameseDataset(Dataset):
-    def __init__(self, root_dir, transform=None, random_aug=False):
+    def __init__(self, root_dir, transform=None, random_aug=False, cache_images=True):
         self.root_dir = root_dir
         self.transform = transform
         self.random_aug = random_aug
         self.random_aug_prob = 0.7
+        self.cache_images = cache_images
+        self.image_cache = {}
         
         # Organizza le immagini per classe (cartella)
         self.class_to_images = {}
         self.data = []
         
+        print("⏳ Organizzazione dataset...")
         # Itera attraverso tutte le cartelle nel root_dir
-        for class_folder in os.listdir(root_dir):
+        for class_folder in tqdm(os.listdir(root_dir)):
             class_path = os.path.join(root_dir, class_folder)
             if os.path.isdir(class_path):
                 # Raccogli tutte le immagini in questa cartella
@@ -66,6 +87,19 @@ class SiameseDataset(Dataset):
                     os.path.join(class2, img2),
                     0  # Label 0 per immagini di classi diverse
                 ))
+        
+        if cache_images:
+            print("⏳ Caching immagini in memoria...")
+            for img1_path, img2_path, _ in tqdm(self.data):
+                for path in [img1_path, img2_path]:
+                    full_path = os.path.join(root_dir, path)
+                    if full_path not in self.image_cache:
+                        try:
+                            img = Image.open(full_path).convert("RGB")
+                            self.image_cache[full_path] = self.transform(img)
+                        except Exception as e:
+                            print(f"Errore caricando {full_path}: {e}")
+            print("✅ Caching immagini completato.")
 
     def __len__(self):
         return len(self.data)
@@ -74,18 +108,19 @@ class SiameseDataset(Dataset):
         img1_path, img2_path, label = self.data[idx]
         
         # Carica le immagini
-        img1 = Image.open(os.path.join(self.root_dir, img1_path)).convert("RGB")
-        img2 = Image.open(os.path.join(self.root_dir, img2_path)).convert("RGB")
+        full_path1 = os.path.join(self.root_dir, img1_path)
+        full_path2 = os.path.join(self.root_dir, img2_path)
         
-        # Applica augmentation se richiesto
-        if self.random_aug:
-            img1 = self.random_augmentation(img1, self.random_aug_prob)
-            img2 = self.random_augmentation(img2, self.random_aug_prob)
-        
-        # Applica le trasformazioni
-        if self.transform:
-            img1 = self.transform(img1)
-            img2 = self.transform(img2)
+        if self.cache_images:
+            img1 = self.image_cache[full_path1]
+            img2 = self.image_cache[full_path2]
+        else:
+            img1 = Image.open(full_path1).convert("RGB")
+            img2 = Image.open(full_path2).convert("RGB")
+            
+            if self.transform:
+                img1 = self.transform(img1)
+                img2 = self.transform(img2)
             
         return img1, img2, label
 
@@ -96,7 +131,7 @@ class SiameseDataset(Dataset):
         return img
 
 # Funzione di caricamento generale
-def retrival_data_loading(train_data_root, query_data_root, gallery_data_root, batch_size=32):
+def retrival_data_loading(train_data_root, query_data_root, gallery_data_root, batch_size=32, num_workers=4, prefetch_factor=2):
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -105,14 +140,40 @@ def retrival_data_loading(train_data_root, query_data_root, gallery_data_root, b
     ])
 
     # Dataset training (base ImageFolder, non triplet)
-    train_dataset = SiameseDataset(train_data_root, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    train_dataset = SiameseDataset(train_data_root, transform=transform, cache_images=True)
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=True,
+        prefetch_factor=prefetch_factor,
+        persistent_workers=True
+    )
 
     # Dataset query & gallery
-    query_dataset = TestImageDataset(query_data_root, transform)
-    gallery_dataset = TestImageDataset(gallery_data_root, transform)
+    query_dataset = TestImageDataset(query_data_root, transform, cache_images=True)
+    gallery_dataset = TestImageDataset(gallery_data_root, transform, cache_images=True)
 
-    query_loader = DataLoader(query_dataset, batch_size=1, shuffle=False)
-    gallery_loader = DataLoader(gallery_dataset, batch_size=batch_size, shuffle=False)
+    query_loader = DataLoader(
+        query_dataset, 
+        batch_size=1, 
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        prefetch_factor=prefetch_factor,
+        persistent_workers=True
+    )
+    
+    gallery_loader = DataLoader(
+        gallery_dataset, 
+        batch_size=batch_size, 
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        prefetch_factor=prefetch_factor,
+        persistent_workers=True
+    )
 
     return train_loader, query_loader, gallery_loader
