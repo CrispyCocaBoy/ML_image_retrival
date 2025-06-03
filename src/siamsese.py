@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torchvision.models import ResNet50_Weights
 from torchvision import models
 
 class SiameseNetwork(nn.Module):
@@ -18,11 +18,11 @@ class SiameseNetwork(nn.Module):
         if backbone not in models.__dict__:
             raise Exception("No model named {} exists in torchvision.models.".format(backbone))
 
-        # Create a backbone network from the pretrained models provided in torchvision.models 
-        self.backbone = models.__dict__[backbone](weights=True, progress=True)
+        # Create a backbone network from the pretrained models provided in torchvision.models
+        self.backbone = models.__dict__[backbone](weights=ResNet50_Weights.DEFAULT, progress=True)
 
         # Freeze the backbone network
-        for param in self.backbone.parameters():
+        for param in self.backbone_full.parameters():
             param.requires_grad = False
 
         # Get the number of features that are outputted by the last layer of backbone network.
