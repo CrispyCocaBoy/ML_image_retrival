@@ -52,7 +52,7 @@ def train_siamese(
     
     # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.1, patience=2, verbose=True
+        optimizer, mode='min', factor=0.1, patience=2,
     )
     
     # Create save directory if it doesn't exist
