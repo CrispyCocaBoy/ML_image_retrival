@@ -1,8 +1,6 @@
 import torch
-import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
-import os
 from pathlib import Path
 from .loss import ContrastiveLoss
 from torch.cuda.amp import autocast, GradScaler

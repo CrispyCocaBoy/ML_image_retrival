@@ -48,17 +48,13 @@ def run(training=True):
     model = SiameseNetwork().to(device)
 
     # === TRAINING MODEL ===
-    model = SiameseNetwork().to(device)
 
     if training:
-        try:
-            compiled_model = torch.compile(model, mode="max-autotune")
-        except Exception as e:
-            print("torch.compile failed, continuing without compilation:", e)
-            compiled_model = model
+        model = torch.compile(model, mode="max-autotune")
+
 
         train_siamese(
-            model=compiled_model,
+            model=model,
             train_loader=base_train_loader,
             val_loader=None,
             optimizer_type="adam",
@@ -81,5 +77,5 @@ def run(training=True):
     print(f"🔍 Submission result: {res}")
 
 if __name__ == "__main__":
-    run(training=False)
+    run(training=True)
 
