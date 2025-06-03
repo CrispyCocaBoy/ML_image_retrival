@@ -56,8 +56,8 @@ def train_siamese(
         optimizer, mode='min', factor=0.1, patience=2,
     )
     
-    # Initialize gradient scaler for mixed precision
-    scaler = GradScaler()
+    # Initialize gradient scaler for mixed precision only if using CUDA
+    scaler = GradScaler() if device.type == 'cuda' else None
     
     # Create save directory if it doesn't exist
     save_path = Path(save_dir)
@@ -73,33 +73,53 @@ def train_siamese(
         train_steps = 0
         
         train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [Train]")
-        optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         
         for i, (img1, img2, label) in enumerate(train_pbar):
-            # Move data to device
-            img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
-            label = label.to(device, non_blocking=True)
-            
-            # Mixed precision training
-            with autocast():
-                # Forward pass
-                output1, output2 = model(img1, img2)
-                loss = criterion(output1, output2, label)
-                loss = loss / gradient_accumulation_steps  # Normalize loss
-            
-            # Backward pass with gradient scaling
-            scaler.scale(loss).backward()
-            
-            # Update weights if we've accumulated enough gradients
-            if (i + 1) % gradient_accumulation_steps == 0:
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad(set_to_none=True)
-            
-            # Update statistics
-            train_loss += loss.item() * gradient_accumulation_steps
-            train_steps += 1
-            train_pbar.set_postfix({"loss": train_loss / train_steps})
+            try:
+                # Move data to device
+                img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
+                label = label.to(device, non_blocking=True)
+                
+                # Mixed precision training only on CUDA
+                if device.type == 'cuda':
+                    with autocast():
+                        output1, output2 = model(img1, img2)
+                        loss = criterion(output1, output2, label)
+                        loss = loss / gradient_accumulation_steps
+                    
+                    # Backward pass with gradient scaling
+                    scaler.scale(loss).backward()
+                    
+                    # Update weights if we've accumulated enough gradients
+                    if (i + 1) % gradient_accumulation_steps == 0:
+                        scaler.step(optimizer)
+                        scaler.update()
+                        optimizer.zero_grad(set_to_none=True)
+                else:
+                    # Regular training for non-CUDA devices
+                    output1, output2 = model(img1, img2)
+                    loss = criterion(output1, output2, label)
+                    loss = loss / gradient_accumulation_steps
+                    loss.backward()
+                    
+                    if (i + 1) % gradient_accumulation_steps == 0:
+                        optimizer.step()
+                        optimizer.zero_grad(set_to_none=True)
+                
+                # Update statistics
+                train_loss += loss.item() * gradient_accumulation_steps
+                train_steps += 1
+                train_pbar.set_postfix({"loss": train_loss / train_steps})
+                
+            except RuntimeError as e:
+                if "out of memory" in str(e):
+                    if device.type == 'cuda':
+                        torch.cuda.empty_cache()
+                    print(f"WARNING: out of memory in batch {i}. Skipping batch...")
+                    continue
+                else:
+                    raise e
         
         avg_train_loss = train_loss / train_steps
         
@@ -109,18 +129,33 @@ def train_siamese(
             val_loss = 0.0
             val_steps = 0
             
-            with torch.no_grad(), autocast():
+            with torch.no_grad():
                 val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]")
                 for img1, img2, label in val_pbar:
-                    img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
-                    label = label.to(device, non_blocking=True)
-                    
-                    output1, output2 = model(img1, img2)
-                    loss = criterion(output1, output2, label)
-                    
-                    val_loss += loss.item()
-                    val_steps += 1
-                    val_pbar.set_postfix({"loss": val_loss / val_steps})
+                    try:
+                        img1, img2 = img1.to(device, non_blocking=True), img2.to(device, non_blocking=True)
+                        label = label.to(device, non_blocking=True)
+                        
+                        if device.type == 'cuda':
+                            with autocast():
+                                output1, output2 = model(img1, img2)
+                                loss = criterion(output1, output2, label)
+                        else:
+                            output1, output2 = model(img1, img2)
+                            loss = criterion(output1, output2, label)
+                        
+                        val_loss += loss.item()
+                        val_steps += 1
+                        val_pbar.set_postfix({"loss": val_loss / val_steps})
+                        
+                    except RuntimeError as e:
+                        if "out of memory" in str(e):
+                            if device.type == 'cuda':
+                                torch.cuda.empty_cache()
+                            print(f"WARNING: out of memory in validation batch. Skipping batch...")
+                            continue
+                        else:
+                            raise e
             
             avg_val_loss = val_loss / val_steps
             
@@ -135,7 +170,7 @@ def train_siamese(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': scheduler.state_dict(),
-                    'scaler_state_dict': scaler.state_dict(),
+                    'scaler_state_dict': scaler.state_dict() if scaler else None,
                     'train_loss': avg_train_loss,
                     'val_loss': avg_val_loss,
                 }, save_path / f"{model_name}_best.pth")
@@ -146,7 +181,7 @@ def train_siamese(
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
-            'scaler_state_dict': scaler.state_dict(),
+            'scaler_state_dict': scaler.state_dict() if scaler else None,
             'train_loss': avg_train_loss,
             'val_loss': avg_val_loss if val_loader else None,
         }, save_path / f"{model_name}_epoch_{epoch+1}.pth")

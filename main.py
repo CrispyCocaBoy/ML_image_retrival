@@ -50,8 +50,21 @@ def run(training=True):
     # === TRAINING MODEL ===
 
     if training:
-        model = torch.compile(model, mode="max-autotune")
-
+        # Try to compile the model with proper error handling
+        try:
+            # Check if we're on a CUDA device and if the CUDA version supports compilation
+            if device.type == 'cuda':
+                if torch.cuda.get_device_capability()[0] >= 7:  # Check for Volta or newer
+                    print("Attempting to compile model with max-autotune...")
+                    model = torch.compile(model, mode="max-autotune")
+                    print("Model compilation successful!")
+                else:
+                    print("Warning: Your GPU does not support model compilation. Running without compilation.")
+            else:
+                print("Warning: Model compilation is only supported on CUDA devices. Running without compilation.")
+        except Exception as e:
+            print(f"Warning: Model compilation failed with error: {str(e)}")
+            print("Continuing without model compilation...")
 
         train_siamese(
             model=model,
@@ -64,12 +77,16 @@ def run(training=True):
             gradient_accumulation_steps=2
         )
 
-        # Salva modello non compilato (per usarlo poi)
-        torch.save(model.state_dict(), "model_repository/siamese_model.pth") 
-
+        # Save uncompiled model state
+        torch.save(model.state_dict(), "model_repository/siamese_model.pth")
+        print("Model saved successfully!")
 
     # === EVALUATION ===
+    # Load model state and create new model instance
+    model = SiameseNetwork().to(device)  # Create fresh model instance
     model.load_state_dict(torch.load("model_repository/siamese_model.pth", map_location=device))
+    model.eval()  # Set to evaluation mode
+    
     results = evaluate_siamese(model, query_loader, gallery_loader, device)
 
     print(f"🔍 Submitting results: {results}")
