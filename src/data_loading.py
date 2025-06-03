@@ -8,9 +8,11 @@ import os
 import random
 from tqdm import tqdm
 
+cache_images = False
+
 # Dataset per query/gallery
 class TestImageDataset(Dataset):
-    def __init__(self, folder_path, transform, target_transform=None, cache_images=True):
+    def __init__(self, folder_path, transform, target_transform=None, cache_images=cache_images):
         self.image_paths = list(Path(folder_path).glob("*.jpg"))
         self.transform = transform
         self.target_transform = target_transform
@@ -43,7 +45,7 @@ class TestImageDataset(Dataset):
 
 # Dataset per il training di Siamese Network
 class SiameseDataset(Dataset):
-    def __init__(self, root_dir, transform=None, random_aug=False, cache_images=True):
+    def __init__(self, root_dir, transform=None, random_aug=False, cache_images=cache_images):
         self.root_dir = root_dir
         self.transform = transform
         self.random_aug = random_aug
@@ -140,7 +142,7 @@ def retrival_data_loading(train_data_root, query_data_root, gallery_data_root, b
     ])
 
     # Dataset training (base ImageFolder, non triplet)
-    train_dataset = SiameseDataset(train_data_root, transform=transform, cache_images=True)
+    train_dataset = SiameseDataset(train_data_root, transform=transform, cache_images=cache_images)
     train_loader = DataLoader(
         train_dataset, 
         batch_size=batch_size, 
@@ -153,8 +155,8 @@ def retrival_data_loading(train_data_root, query_data_root, gallery_data_root, b
     )
 
     # Dataset query & gallery
-    query_dataset = TestImageDataset(query_data_root, transform, cache_images=True)
-    gallery_dataset = TestImageDataset(gallery_data_root, transform, cache_images=True)
+    query_dataset = TestImageDataset(query_data_root, transform, cache_images=cache_images)
+    gallery_dataset = TestImageDataset(gallery_data_root, transform, cache_images=cache_images)
 
     query_loader = DataLoader(
         query_dataset, 

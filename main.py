@@ -41,7 +41,7 @@ def run(training=True):
     print("Gallery images:", len(gallery_loader.dataset))
 
     # === MODEL ===
-    model = SiameseNetwork(backbone="resnet18").to(device)  # Usiamo ResNet18 per velocità
+    model = SiameseNetwork(backbone="resnet50").to(device)  # Usiamo ResNet18 per velocità
 
     # === TRAINING MODEL ===
     if training == True:
