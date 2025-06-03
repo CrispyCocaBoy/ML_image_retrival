@@ -106,7 +106,7 @@ def retrival_data_loading(train_data_root, query_data_root, gallery_data_root, b
 
     # Dataset training (base ImageFolder, non triplet)
     train_dataset = SiameseDataset(train_data_root, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     # Dataset query & gallery
     query_dataset = TestImageDataset(query_data_root, transform)
