@@ -12,6 +12,7 @@ from src.extract_embeddings_generic import extract_embeddings
 from src.efficientnet_embedder import EfficientNetEmbedder
 from torchvision.models import EfficientNet_B0_Weights
 from src.results import get_top_k
+from src.folder_dataset import FolderDataset, InferenceFolderDataset, FlatInferenceDataset
 
 def main():
     device = config.device
@@ -52,10 +53,10 @@ def main():
     model.eval()
 
     # === Test datasets using FolderDataset + DataLoader ===
-    query_dataset = FolderDataset(config.query_dir, transform=preprocess)
+    query_dataset = FlatInferenceDataset(config.query_dir, transform=preprocess)
     query_loader = DataLoader(query_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
 
-    gallery_dataset = FolderDataset(config.gallery_dir, transform=preprocess)
+    gallery_dataset = FlatInferenceDataset(config.gallery_dir, transform=preprocess)
     gallery_loader = DataLoader(gallery_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
 
     # query_features = extract_clip_embeddings(model, query_images, device)

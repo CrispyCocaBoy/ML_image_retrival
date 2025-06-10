@@ -3,6 +3,10 @@ import torch
 
 @torch.no_grad()
 def extract_embeddings(model, dataloader, device):
+
+    print(f"Dataset size: {len(dataloader.dataset)}")
+    print(f"Dataloader batches: {len(dataloader)}")
+
     model = model.to(device)
     model.eval()
 
