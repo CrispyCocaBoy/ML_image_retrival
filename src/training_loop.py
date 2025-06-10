@@ -2,7 +2,7 @@ import os
 import torch
 from config import config
 from src.finetuned_clip import FineTunedCLIP
-from src.triplet_dataset import TripletDataset
+from src.folder_dataset import FolderDataset
 from src.train_triplet import train
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -27,7 +27,7 @@ def check_and_train():
         )
     ])
 
-    train_dataset = TripletDataset(config.train_dir, transform=preprocess)
+    train_dataset = FolderDataset(config.train_dir, transform=preprocess)
     train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
 
     model = FineTunedCLIP(device=device, embed_dim=config.embedding_dim, freeze_clip=True)

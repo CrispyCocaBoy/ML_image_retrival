@@ -6,13 +6,12 @@ from torch.utils.data import DataLoader
 
 from config import config
 from src.finetuned_clip import FineTunedCLIP
-from src.triplet_dataset import TripletDataset
+from src.folder_dataset import FolderDataset
 from src.train_triplet import train
-from src.extract_embeddings_clip import extract_clip_embeddings
 from src.extract_embeddings_generic import extract_embeddings
 from src.efficientnet_embedder import EfficientNetEmbedder
 from torchvision.models import EfficientNet_B0_Weights
-from src.results import get_top_k, load_images_from_folder
+from src.results import get_top_k
 
 def main():
     device = config.device
@@ -31,17 +30,16 @@ def main():
     preprocess = weights.transforms()
 
     # === Dataset di training (con triplette) ===
-    train_dataset = TripletDataset(config.train_dir, transform=preprocess)
+    train_dataset = FolderDataset(config.train_dir, transform=preprocess)
     train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
 
     # === Model ===
     #model = FineTunedCLIP(device=device, embed_dim=config.embedding_dim, freeze_clip=True)
-    model = EfficientNetEmbedder(embed_dim=config.embedding_dim, freeze_backbone=True)
+    model = EfficientNetEmbedder(embed_dim=config.embedding_dim, freeze_backbone=False)
 
 
     #model_path = "finetuned_clip.pth"
     model_path = "efficientnet_triplet.pth"
-    model_path = "finetuned_clip.pth"
     if config.force_train or not os.path.exists(model_path):
         print("🚀 Avvio training del modello fine-tuned efficient_net...")
         train(model, train_loader, device, epochs=config.epochs, lr=config.learning_rate)
@@ -53,15 +51,18 @@ def main():
 
     model.eval()
 
-    # === Dataset di test (senza classi) ===
-    query_paths, query_images = load_images_from_folder(config.query_dir, transform=preprocess)
-    gallery_paths, gallery_images = load_images_from_folder(config.gallery_dir, transform=preprocess)
+    # === Test datasets using FolderDataset + DataLoader ===
+    query_dataset = FolderDataset(config.query_dir, transform=preprocess)
+    query_loader = DataLoader(query_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
+
+    gallery_dataset = FolderDataset(config.gallery_dir, transform=preprocess)
+    gallery_loader = DataLoader(gallery_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
 
     # query_features = extract_clip_embeddings(model, query_images, device)
     # gallery_features = extract_clip_embeddings(model, gallery_images, device)
 
-    query_features = extract_embeddings(model, query_images, device)
-    gallery_features = extract_embeddings(model, gallery_images, device)
+    query_features, query_paths = extract_embeddings(model, query_loader, device)
+    gallery_features, gallery_paths = extract_embeddings(model, gallery_loader, device)
 
     results = get_top_k(query_features, gallery_features, gallery_paths, query_paths,
                         k=config.top_k, distance=config.distance_metric)
