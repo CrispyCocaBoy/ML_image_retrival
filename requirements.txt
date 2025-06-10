@@ -8,3 +8,4 @@ matplotlib
 scikit-learn
 tqdm
 icrawler
+git+https://github.com/openai/CLIP.git
