@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
+from config import config  # aggiunta
 
 class TripletLoss(nn.Module):
     def __init__(self, margin=1.0):
@@ -14,7 +15,7 @@ class TripletLoss(nn.Module):
 
 def train(model, dataloader, device="cuda", epochs=10, lr=1e-4):
     model = model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=config.weight_decay)
     criterion = TripletLoss()
 
     model.train()
