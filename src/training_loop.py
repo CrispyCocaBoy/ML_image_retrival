@@ -4,7 +4,9 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-import config
+
+# Importing actual config and FineTunedCLIP from your project structure
+from config import config
 from src.finetuned_clip import FineTunedCLIP
 
 class CLIPLoss(nn.Module):
@@ -67,8 +69,9 @@ def train_clip_hybrid(model, dataloader, device="cuda", epochs=10, lr=1e-5):
         torch.nn.Module: The trained model.
     """
     model = model.to(device)
-    # Initialize the Adam optimizer with the model's parameters.
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    # Initialize the Adam optimizer with the model's parameters,
+    # now including weight_decay from the config.
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=config.weight_decay)
     # Initialize the CLIPLoss criterion.
     criterion = CLIPLoss()
 
