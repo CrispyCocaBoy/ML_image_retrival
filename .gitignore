@@ -17,3 +17,5 @@ repository/
 .idea
 .DS_store
 Competition/
+
+retrieval_results.json

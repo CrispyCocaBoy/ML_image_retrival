@@ -4,8 +4,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-import os # Import os for path operations and directory creation
-import csv # Import csv for logging metrics
+import os
+import csv
 
 # Importing actual config and FineTunedCLIP from your project structure
 from config import config
@@ -71,7 +71,36 @@ def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", ep
         torch.nn.Module: The trained model.
     """
     model = model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=config.weight_decay)
+    
+    # --- MODIFIED: Implement Discriminative Learning Rates ---
+    # Separate parameters into groups based on whether they belong to the
+    # original CLIP backbone or the newly added projection layers.
+    optimizer_params = []
+    clip_backbone_params = []
+    projection_params = []
+
+    for name, param in model.named_parameters():
+        if param.requires_grad: # Only consider trainable parameters
+            if 'clip_model' in name:
+                # Parameters from the original CLIP backbone
+                clip_backbone_params.append(param)
+            else:
+                # Parameters from the new projection layers
+                projection_params.append(param)
+    
+    # Add parameter groups to the optimizer list
+    if projection_params:
+        optimizer_params.append({'params': projection_params, 'lr': lr})
+    
+    if clip_backbone_params:
+        # Apply a smaller learning rate to the pre-trained CLIP backbone
+        backbone_lr = lr * config.clip_backbone_learning_rate_ratio
+        optimizer_params.append({'params': clip_backbone_params, 'lr': backbone_lr})
+
+    # Initialize the Adam optimizer with the defined parameter groups
+    optimizer = optim.Adam(optimizer_params, betas=(0.9, 0.98), eps=1e-6, weight_decay=config.weight_decay)
+    # --- END MODIFIED ---
+
     criterion = CLIPLoss()
 
     # --- Setup directories for saving metrics and weights ---
@@ -108,10 +137,10 @@ def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", ep
 
             loss = criterion(image_features, text_features, model.logit_scale)
             loss.backward()
-            # --- ADDED: Gradient Clipping ---
-            # This prevents gradients from exploding, which can lead to NaN loss.
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # You can adjust max_norm
-            # --- END ADDED ---
+            
+            # Gradient Clipping: Essential when unfreezing large models to prevent exploding gradients.
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) 
+            
             optimizer.step()
 
             total_train_loss += loss.item()
