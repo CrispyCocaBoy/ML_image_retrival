@@ -35,14 +35,19 @@ class FineTunedCLIP(nn.Module):
         """
         super().__init__()
         self.device = device
+        self.freeze_clip = freeze_clip # Store this setting for potential future use or clarity
 
         # Load the pre-trained CLIP model (ViT-B/32 architecture) and move it to the specified device.
         self.clip_model, _ = clip.load("ViT-B/32", device=device)
         self.clip_model = self.clip_model.to(device)
 
-        if freeze_clip:
+        if self.freeze_clip:
             for param in self.clip_model.parameters():
                 param.requires_grad = False
+            # --- CRUCIAL FIX: Ensure logit_scale is always trainable ---
+            # logit_scale is a critical learnable parameter in CLIP and must be updated
+            # for the loss to be stable, even if the rest of the backbone is frozen.
+            self.clip_model.logit_scale.requires_grad = True 
 
         # Define a linear projection layer for image features, now including Dropout.
         # Dropout is added here for regularization on the new projection layer.
@@ -58,56 +63,36 @@ class FineTunedCLIP(nn.Module):
             nn.Dropout(config.dropout_rate) # Add Dropout layer
         ).to(device)
 
-    # Note: The forward, encode_image, and encode_text methods still use
-    # `torch.no_grad()` for the CLIP backbone. This is correct if `freeze_clip` is True.
-    # If `freeze_clip` were False, you would remove `torch.no_grad()` from these methods
-    # to allow the backbone to train.
+    # --- SIMPLIFIED: Removed `with torch.no_grad()` from `encode_image` and `encode_text`. ---
+    # The `requires_grad=False` setting on parameters already handles freezing the backbone.
+    # This ensures that `logit_scale` (which has `requires_grad=True`) can receive gradients.
     
     def forward(self, x):
         """
         Defines the forward pass of the model for image encoding.
-        This method should typically not be called directly for training
-        as it includes no_grad(). `encode_image` and `encode_text` are used for training.
+        For training with CLIP, `encode_image` and `encode_text` are typically called directly.
         """
-        # It's typical for the main CLIP backbone to be in no_grad if frozen
-        with torch.no_grad(): 
-            x = self.clip_model.encode_image(x.to(self.device))
-        return self.image_projection(x.float())
+        # Call encode_image directly; autograd will handle gradient tracking based on requires_grad flags.
+        return self.image_projection(self.clip_model.encode_image(x.to(self.device)).float())
 
     def encode_image(self, x):
         """
         Encodes an image tensor into a projected embedding.
-        If `freeze_clip` is True, this runs the CLIP backbone in no_grad.
+        The freezing of the CLIP backbone is managed by `requires_grad` flags set in `__init__`.
         """
-        # Only detach gradients from CLIP backbone if it's frozen
-        if not self.clip_model.training: # Check if model is in eval mode (like for inference)
-             with torch.no_grad():
-                 x = self.clip_model.encode_image(x.to(self.device))
-        else: # During training, if CLIP backbone is unfrozen, gradients flow
-            # If freeze_clip was true, then parameters are already set to requires_grad=False
-            # so no_grad is fine. If freeze_clip is false, you generally remove the no_grad()
-            # block here to allow gradients to flow through the backbone.
-            # However, for this specific setup where freeze_clip is True, the `with torch.no_grad():` is fine.
-            x = self.clip_model.encode_image(x.to(self.device))
-
-        return self.image_projection(x.float())
+        # Ensure input is on the correct device. Autograd handles gradient flow.
+        clip_features = self.clip_model.encode_image(x.to(self.device))
+        return self.image_projection(clip_features.float())
 
     def encode_text(self, text_tokens):
         """
         Encodes tokenized text into a projected embedding using the CLIP text encoder.
-        If `freeze_clip` is True, this runs the CLIP backbone in no_grad.
+        The freezing of the CLIP backbone is managed by `requires_grad` flags set in `__init__`.
         """
-        # Only detach gradients from CLIP backbone if it's frozen
-        if not self.clip_model.training: # Check if model is in eval mode (like for inference)
-            with torch.no_grad():
-                text_features = self.clip_model.encode_text(text_tokens.to(self.device))
-        else: # During training, if CLIP backbone is unfrozen, gradients flow
-            # If freeze_clip was true, then parameters are already set to requires_grad=False
-            # so no_grad is fine. If freeze_clip is false, you generally remove the no_grad()
-            # block here to allow gradients to flow through the backbone.
-            text_features = self.clip_model.encode_text(text_tokens.to(self.device))
+        # Ensure input is on the correct device. Autograd handles gradient flow.
+        clip_features = self.clip_model.encode_text(text_tokens.to(self.device))
             
-        return self.text_projection(text_features.float()) # Apply text_projection here!
+        return self.text_projection(clip_features.float())
 
     @property
     def logit_scale(self):

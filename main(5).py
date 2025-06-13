@@ -2,8 +2,9 @@ import os
 import json
 import torch
 from torchvision import transforms
-from torch.utils.data import DataLoader
-# Removed: from types import SimpleNamespace # No longer needed as config will be imported
+from torch.utils.data import DataLoader, Subset # Import Subset for dataset splitting
+import random # Import random for shuffling indices
+from types import SimpleNamespace # Make sure SimpleNamespace is imported if config is directly defined here or for clarity
 
 # Import your configuration from a separate config.py file
 from config import config
@@ -41,12 +42,29 @@ def check_and_train_model():
             )
         ])
         
-        # Prepare the training dataset and dataloader
-        train_dataset = ImageTextDataset(config.train_dir, transform=preprocess)
-        train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+        # Prepare the full dataset
+        full_train_dataset = ImageTextDataset(config.train_dir, transform=preprocess)
         
-        # Perform the actual training
-        train_clip_hybrid(model, train_loader, device, epochs=config.epochs, lr=config.learning_rate)
+        # --- Split dataset into training and validation sets ---
+        dataset_size = len(full_train_dataset)
+        validation_split = 0.15 # 15% for validation, adjust as needed
+        indices = list(range(dataset_size))
+        random.shuffle(indices) # Shuffle indices for random split
+        
+        split = int(validation_split * dataset_size)
+        train_indices, val_indices = indices[split:], indices[:split]
+        
+        train_dataset = Subset(full_train_dataset, train_indices)
+        val_dataset = Subset(full_train_dataset, val_indices)
+        
+        # Create dataloaders for training and validation
+        train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False) # No need to shuffle validation
+        
+        print(f"Training on {len(train_dataset)} samples, validating on {len(val_dataset)} samples.")
+        
+        # Perform the actual training, passing both train and val dataloaders
+        train_clip_hybrid(model, train_loader, val_loader, device, epochs=config.epochs, lr=config.learning_rate)
         
         # Save the state dictionary of the newly trained model to the specified path
         torch.save(model.state_dict(), model_path)
