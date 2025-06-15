@@ -121,7 +121,7 @@ def datasets(
     # --- train ---
     train_ds = TrainingDataset(
         root_dir=training_dir,
-        transform=transform,
+        transform= clip_transform,
         seed=seed,
         num_pairs=num_pairs
     )
@@ -136,7 +136,7 @@ def datasets(
     # --- validation (stesso dataset, ma senza shuffle) ---
     val_ds = TrainingDataset(
         root_dir=training_dir,
-        transform=transform,
+        transform=clip_transform,
         seed=seed+1,      # seed diversa così campiona coppie differenti
         num_pairs=num_val
     )
@@ -149,8 +149,8 @@ def datasets(
     )
 
     # --- query & gallery ---
-    query_ds = QueryDataset(root_dir=query_dir, transform=transform)
-    gallery_ds = GalleryDataset(root_dir=gallery_dir, transform=transform)
+    query_ds = QueryDataset(root_dir=query_dir, transform=clip_transform)
+    gallery_ds = GalleryDataset(root_dir=gallery_dir, transform=clip_transform)
 
     query_loader   = DataLoader(query_ds,   batch_size=1,            shuffle=False, num_workers=num_workers)
     gallery_loader = DataLoader(gallery_ds, batch_size=batch_size,    shuffle=False, num_workers=num_workers, drop_last=True)

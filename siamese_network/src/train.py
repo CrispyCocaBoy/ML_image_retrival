@@ -1,10 +1,11 @@
 import re
 import os
+import csv
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from glob import glob
-import wandb
+
 
 def contrastive_loss(distance, labels, margin=1.0):
     positive = labels * distance.pow(2)
@@ -31,21 +32,6 @@ def train_loop(
     model.to(device)
     model.train()
 
-    wandb.init(
-        project="clip-siamese",
-        entity="Simple_Guys",
-        name=f"siamese_margin{margin}_lr{lr}",
-        config={
-            "architecture": "CLIP Siamese",
-            "epochs": epochs,
-            "lr": lr,
-            "optimizer": optimizer_name,
-            "early_stops": early_stops,
-            "margin": margin
-        }
-    )
-
-    # Select optimizer
     if optimizer_name.lower() == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     elif optimizer_name.lower() == "adam":
@@ -59,12 +45,10 @@ def train_loop(
     no_improvement = 0
     start_epoch = 1
 
-    # Helper per numeri di epoch
     def _epoch_num(path):
         m = re.search(r"epoch_(\d+)\.pth$", path)
         return int(m.group(1)) if m else -1
 
-    # Carica checkpoint
     if use_checkpoint:
         checkpoints = glob("repository/checkpoints/epoch_*.pth")
         if checkpoints:
@@ -99,6 +83,8 @@ def train_loop(
         best_val_loss = evaluate_validation_loss()
         print(f"Initial best_val_loss = {best_val_loss:.4f}")
 
+    log_data = []
+
     for epoch in range(start_epoch, total_epochs + 1):
         model.train()
         total_loss = 0.0
@@ -123,7 +109,11 @@ def train_loop(
         current_lr = optimizer.param_groups[0]['lr']
         print(f"Epoch {epoch} - Avg Train Loss: {avg_loss:.4f} | Val Loss: {val_loss:.4f} | 🔁 LR: {current_lr:.6f}")
 
+        log_data.append({'epoch': epoch, 'avg_train_loss': avg_loss, 'avg_val_loss': val_loss})
+
         if save_weights:
+            os.makedirs("repository/checkpoints", exist_ok=True)
+            os.makedirs("repository/all_weights", exist_ok=True)
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()}
             torch.save(ckpt, f"repository/checkpoints/epoch_{epoch}.pth")
@@ -133,6 +123,7 @@ def train_loop(
             if val_loss < best_val_loss - 1e-4:
                 best_val_loss = val_loss
                 no_improvement = 0
+                os.makedirs("repository/best_model", exist_ok=True)
                 torch.save(model.state_dict(), "repository/best_model/model.pt")
                 print(f"New best validation loss: {best_val_loss:.4f} — model saved.")
             else:
@@ -142,11 +133,13 @@ def train_loop(
                 print("Early stopping triggered")
                 break
 
-        wandb.log({
-            "epoch": epoch,
-            "train_loss": avg_loss,
-            "val_loss": val_loss,
-            "learning_rate": current_lr
-        })
+    csv_path = "repository/train_logs/loss_log.csv"
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    with open(csv_path, mode='w', newline='') as csv_file:
+        fieldnames = ['epoch', 'avg_train_loss', 'avg_val_loss']
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in log_data:
+            writer.writerow(row)
 
-    print("Training completed.")
+    print("Training completed. Loss log saved to:", csv_path)

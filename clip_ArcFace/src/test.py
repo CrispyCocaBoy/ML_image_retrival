@@ -75,7 +75,7 @@ def submit(data: Dict[str, List[str]], group_name = "Simple_Guys", url="http://t
         print(f"Server response is not JSON:\n{response.text}")
 
 
-def show_retrieved_images(results: dict, query_dir: str, gallery_dir: str, k: int = 5, n_queries: int = 5):
+def show_retrieved_images(results: dict, query_dir: str, gallery_dir: str, k: int = 10, n_queries: int = 10):
     query_names = list(results.keys())[:n_queries]
 
     for query_name in query_names:

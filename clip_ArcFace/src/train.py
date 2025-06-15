@@ -5,7 +5,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from glob import glob
 import wandb
-from src.loss import ArcFace
+from clip_ArcFace.src.loss import ArcFace
 
 
 # == Training loop for classification with CrossEntropyLoss (Early Stopping on Validation Loss) ==
@@ -40,6 +40,10 @@ def train_loop(
         }
     )
 
+    # Create directory for metrics
+    os.makedirs("repository/metrics", exist_ok=True)
+    history = []
+
     # Select optimizer
     if optimizer_name.lower() == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
@@ -63,7 +67,6 @@ def train_loop(
     if use_checkpoint:
         checkpoints = glob("repository/checkpoints/epoch_*.pth")
         if checkpoints:
-            # Sort by numeric epoch
             checkpoints = sorted(checkpoints, key=_epoch_num)
             latest_ckpt = checkpoints[-1]
             checkpoint = torch.load(latest_ckpt, map_location=device)
@@ -125,6 +128,8 @@ def train_loop(
 
         # Save weights
         if save_weights:
+            os.makedirs("repository/checkpoints", exist_ok=True)
+            os.makedirs("repository/all_weights", exist_ok=True)
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()}
             torch.save(ckpt, f"repository/checkpoints/epoch_{epoch}.pth")
@@ -135,6 +140,7 @@ def train_loop(
             if val_loss < best_val_loss - 1e-4:
                 best_val_loss = val_loss
                 no_improvement = 0
+                os.makedirs("repository/best_model", exist_ok=True)
                 torch.save(model.state_dict(), "repository/best_model/model.pt")
                 print(f"New best validation loss: {best_val_loss:.4f} — model saved.")
             else:
@@ -152,5 +158,12 @@ def train_loop(
             "val_loss": val_loss,
             "learning_rate": current_lr
         })
+
+        # Save to CSV
+        history.append([epoch, avg_loss, val_loss])
+        with open("repository/metrics/loss_history.csv", "w") as f:
+            f.write("epoch,train_loss,val_loss\n")
+            for e, t_loss, v_loss in history:
+                f.write(f"{e},{t_loss:.6f},{v_loss:.6f}\n")
 
     print("Training completed.")

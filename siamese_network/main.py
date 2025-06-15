@@ -13,11 +13,11 @@ validation_directory = "data/validation"
 batch_size = 16
 seed = 1
 epochs = 35
-num_pairs = 50
+num_pairs = 5000
 num_worker = 4
 
 # == Definizione variabili allenamento ==
-learning_rate = 1e-5  # It will get modified by scheduler
+learning_rate = 1e-4  # It will get modified by scheduler
 optimizer = "adam"
 margin = 0.5
 
@@ -83,4 +83,4 @@ def run(training):
 
 
 if __name__ == "__main__":
-    run(training=True)
+    run(training=False)

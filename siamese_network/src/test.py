@@ -66,7 +66,7 @@ def submit(results, groupname = "Simple Guys", url="http://tatooine.disi.unitn.i
         print(f"ERROR: {response.text}")
 
 
-def show_retrieved_images(results: dict, query_dir: str, gallery_dir: str, k: int = 5, n_queries: int = 5):
+def show_retrieved_images(results: dict, query_dir: str, gallery_dir: str, k: int = 10, n_queries: int = 10):
     """
     Visualizza i risultati di image retrieval.
     
