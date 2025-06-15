@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from torchvision.transforms import InterpolationMode
 from PIL import Image
 
-# Trasformazione compatibile con CLIP (ViT-L/14 e simili)
+# trasformation standard for CLIP
 clip_transform = transforms.Compose([
     transforms.Resize(224, interpolation=InterpolationMode.BICUBIC),
     transforms.CenterCrop(224),
@@ -48,11 +48,10 @@ def datasets(
     drop_last=True,
     verbose=True
 ):
-    # Se non viene fornita una trasformazione, usa quella CLIP
     if transform is None:
         transform = clip_transform
 
-    # Controllo esistenza directory
+    # C
     for dir_path, name in zip([training_dir, query_dir, gallery_dir], ["training", "query", "gallery"]):
         if not os.path.isdir(dir_path):
             raise FileNotFoundError(f"Directory '{name}' non trovata: {dir_path}")
@@ -60,13 +59,13 @@ def datasets(
     if verbose:
         print(f"Caricamento dati da:\n - Training: {training_dir}\n - Query: {query_dir}\n - Gallery: {gallery_dir}")
 
-    # Caricamento dataset
-    train_dataset = ImageFolder(root=training_dir, transform=transform)
-    query_dataset = gallery_query(image_dir=query_dir, transform=transform)
-    gallery_dataset = gallery_query(image_dir=gallery_dir, transform=transform)
-    validation_dataset = ImageFolder(root=validation_dir, transform=transform)
+    # create dataset
+    train_dataset = ImageFolder(root=training_dir, transform=clip_transform)
+    query_dataset = gallery_query(image_dir=query_dir, transform=clip_transform)
+    gallery_dataset = gallery_query(image_dir=gallery_dir, transform=clip_transform)
+    validation_dataset = ImageFolder(root=validation_dir, transform=clip_transform)
 
-    # Creazione dataloader
+    # create dataloader
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True,
         num_workers=num_workers, drop_last=drop_last

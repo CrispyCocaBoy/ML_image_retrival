@@ -1,10 +1,8 @@
 import json
 import requests
 import torch
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 from typing import Dict, List
-import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import os
@@ -48,16 +46,8 @@ def fast_test(model, query_loader, gallery_loader, device, k=10):
     return results
 
 
-# Versione conforme alla specifica richiesta
-def submit(data: Dict[str, List[str]], group_name = "Simple_Guys", url="http://tatooine.disi.unitn.it:3001/retrieval/"):
-    """
-    Invia i risultati del retrieval al server per la valutazione.
 
-    Args:
-        data: dizionario {query_image_name: [top_k_retrieved_images]}
-        group_name: nome del gruppo per l’identificazione
-        url: endpoint per la sottomissione (di default quello fornito)
-    """
+def submit(data: Dict[str, List[str]], group_name = "Simple_Guys", url="http://tatooine.disi.unitn.it:3001/retrieval/"):
     payload = {
         "groupname": group_name,
         "images": data
