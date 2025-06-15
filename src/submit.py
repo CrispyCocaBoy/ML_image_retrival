@@ -30,7 +30,7 @@ def submit(results: dict, groupname: str, url: str = "http://tatooine.disi.unitn
         accuracy = result.get('accuracy') # Safely get the accuracy key
         if accuracy is not None:
             print(f"accuracy is {accuracy}")
-            return accuracy # <--- THIS IS THE CRUCIAL LINE: Return the accuracy!
+            return accuracy
         else:
             print(f"ERROR: 'accuracy' key not found in response from server: {response.text}")
             return None # Return None if accuracy is missing in the successful response

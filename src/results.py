@@ -65,12 +65,12 @@ def get_top_k(query_embeds: torch.Tensor, gallery_embeds: torch.Tensor,
               and values are lists of base filenames of their `k` most similar
               gallery images, sorted by similarity.
     """
-    results = {} # Dictionary to store retrieval results
+    results = {} 
 
     # Iterate through each query embedding to find its similar gallery images.
     for i, query in enumerate(query_embeds):
         if distance == "cosine":
-            # Calculate cosine distance (1 - cosine similarity). Lower value means more similar.
+            # Calculate cosine distance (1 - cosine similarity)
             # query.unsqueeze(0) adds a batch dimension to allow broadcasting with gallery_embeds.
             dists = 1 - F.cosine_similarity(gallery_embeds, query.unsqueeze(0))
         elif distance == "euclidean":
@@ -82,7 +82,6 @@ def get_top_k(query_embeds: torch.Tensor, gallery_embeds: torch.Tensor,
             raise ValueError(f"Unsupported distance metric: {distance}")
 
         # Find the indices of the `k` smallest distances (most similar images).
-        # `largest=False` ensures we get the smallest distances.
         topk = torch.topk(dists, k=k, largest=False)
 
         # Map the top-k indices back to the original gallery image filenames.

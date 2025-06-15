@@ -35,7 +35,7 @@ class FineTunedCLIP(nn.Module):
         """
         super().__init__()
         self.device = device
-        self.freeze_clip = freeze_clip # Store this setting for potential future use or clarity
+        self.freeze_clip = freeze_clip 
 
         # Load the pre-trained CLIP model (ViT-B/32 architecture) and move it to the specified device.
         self.clip_model, _ = clip.load("ViT-B/32", device=device)
@@ -44,28 +44,19 @@ class FineTunedCLIP(nn.Module):
         if self.freeze_clip:
             for param in self.clip_model.parameters():
                 param.requires_grad = False
-            # --- CRUCIAL FIX: Ensure logit_scale is always trainable ---
-            # logit_scale is a critical learnable parameter in CLIP and must be updated
-            # for the loss to be stable, even if the rest of the backbone is frozen.
             self.clip_model.logit_scale.requires_grad = True 
 
-        # Define a linear projection layer for image features, now including Dropout.
-        # Dropout is added here for regularization on the new projection layer.
+        # Define a linear projection layer for image features
         self.image_projection = nn.Sequential(
             nn.Linear(self.clip_model.visual.output_dim, embed_dim),
             nn.Dropout(config.dropout_rate) # Add Dropout layer
         ).to(device)
 
-        # Define a linear projection layer for text features, now including Dropout.
-        # Dropout is added here for regularization on the new projection layer.
+        # Define a linear projection layer for text features
         self.text_projection = nn.Sequential(
             nn.Linear(512, embed_dim), # Fixed input dimension to 512 for CLIP ViT-B/32 text features
             nn.Dropout(config.dropout_rate) # Add Dropout layer
         ).to(device)
-
-    # --- SIMPLIFIED: Removed `with torch.no_grad()` from `encode_image` and `encode_text`. ---
-    # The `requires_grad=False` setting on parameters already handles freezing the backbone.
-    # This ensures that `logit_scale` (which has `requires_grad=True`) can receive gradients.
     
     def forward(self, x):
         """

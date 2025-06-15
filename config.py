@@ -5,23 +5,22 @@ from types import SimpleNamespace
 config = SimpleNamespace(
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     # Dataset and Dataloader settings
-    train_dir="Competition/train",  # Corrected path based on previous discussion
-    query_dir="Competition/test/query",
-    gallery_dir="Competition/test/gallery",
+    train_dir="Competition/data/train",  
+    query_dir="Competition/data/test/query",
+    gallery_dir="Competition/data/test/gallery",
     
     # Model and Training settings
     embedding_dim=512,         # Dimension of the projected embeddings
     batch_size=256,             # Batch size for training and inference
-    epochs=1,                 # Recommended starting point, increase later if needed
-    learning_rate=1e-4,        # Learning rate for the NEW projection layers (higher)
+    epochs=2,                 # Recommended starting point, increase later if needed
+    learning_rate=1e-4,        # Learning rate for the NEW projection layers 
     weight_decay=1e-3,         # Weight decay for regularization (L2 penalty)
     dropout_rate=0.3,          # Dropout rate for projection layers
     
     # --- Control training behavior ---
-    force_train=True,          # <--- ADDED/ENSURED THIS IS PRESENT: If True, always retrain; otherwise, loads if finetuned_clip.pth exists.
-    freeze_clip=True,         # Set to False to unfreeze the CLIP backbone
+    force_train=True,         
+    freeze_clip=True,        
     # Ratio for CLIP backbone learning rate: backbone_lr = learning_rate * ratio
-    # Typically, a very small value like 0.01 or 0.1 compared to the projection layer LR.
     clip_backbone_learning_rate_ratio=0.01, 
     
     # Retrieval settings

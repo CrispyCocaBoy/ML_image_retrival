@@ -4,6 +4,7 @@ import glob
 import re
 import json
 from tqdm import tqdm # Import tqdm for progress bars in embedding extraction
+import clip
 
 # Import your custom modules and config needed for evaluation
 from config import config
@@ -89,28 +90,51 @@ def perform_retrieval_and_save_results(
     output_path = os.path.join(results_dir, f"retrieval_results_epoch_{epoch_number}.json")
     with open(output_path, "w") as f:
         json.dump(result, f, indent=2)
-    print(f"✅ Retrieval results for epoch {epoch_number} saved to {output_path}")
+    print(f"Retrieval results for epoch {epoch_number} saved to {output_path}")
 
-# You can keep a main function in evaluate_all.py (or evaluation.py)
-# for standalone testing, but ensure it calls the above function.
+# --- Standalone Execution Block ---
 if __name__ == "__main__":
-    # Example usage if you run this script directly:
-    # Requires a dummy model or a loaded checkpoint.
-    # from src.finetuned_clip import FineTunedCLIP # Make sure this is imported
-    # clip_model, preprocess = clip.load("ViT-B/32", device=config.device)
-    # model_for_testing = FineTunedCLIP(config.device, config.embedding_dim, config.freeze_clip).to(config.device)
-    # # Load a trained model if available for testing
-    # # model_for_testing.load_state_dict(torch.load("path/to/your/weights_epoch_X.pth", map_location=config.device))
-    # # Then call:
-    # perform_retrieval_and_save_results(
-    #     model=model_for_testing,
-    #     query_dir=config.query_dir,
-    #     gallery_dir=config.gallery_dir,
-    #     top_k=config.top_k,
-    #     distance_metric=config.distance_metric,
-    #     device=config.device,
-    #     batch_size=config.batch_size,
-    #     epoch_number=999 # Dummy epoch for testing
-    # )
-    print("This script is primarily intended to be imported as a module.")
+    print("Running src/evaluation.py in standalone mode.")
+    
+    cfg = config # Load configuration
+    
+    # 1. Load the base CLIP model and its preprocessing function
+    clip_model_base, preprocess_base = clip.load("ViT-B/32", device=cfg.device)
+
+    # 2. Specify which trained model to load for evaluation
+    # You need to manually specify a path to one of your saved full models (model_epoch_X.pt)
+    # For example, let's load the model from epoch 1
+    TARGET_EPOCH_TO_EVALUATE = 1 # Change this to the epoch you want to test
+    model_to_load_path = os.path.join("repository", "all_weights", f"model_epoch_{TARGET_EPOCH_TO_EVALUATE}.pt")
+
+    if not os.path.exists(model_to_load_path):
+        print(f"Error: Model checkpoint not found at {model_to_load_path}. "
+              "Please train your model first or specify an existing path.")
+        exit(1)
+
+    try:
+        # Load the entire FineTunedCLIP model object
+        print(f"Loading model from {model_to_load_path}...")
+        model_for_standalone_eval = torch.load(model_to_load_path, map_location=cfg.device, weights_only=False)
+        model_for_standalone_eval.eval()
+        print("Model loaded successfully.")
+    except Exception as e:
+        print(f"Failed to load model from {model_to_load_path}: {e}")
+        exit(1)
+
+    # 3. Call the evaluation function
+    perform_retrieval_and_save_results(
+        model=model_for_standalone_eval,
+        query_dir=cfg.query_dir,
+        gallery_dir=cfg.gallery_dir,
+        top_k=cfg.top_k,
+        distance_metric=cfg.distance_metric,
+        device=cfg.device,
+        batch_size=cfg.batch_size,
+        epoch_number=TARGET_EPOCH_TO_EVALUATE, # Use the specified epoch number
+        preprocess_func=preprocess_base # Pass the preprocess function
+    )
+    print(f"\nStandalone evaluation for Epoch {TARGET_EPOCH_TO_EVALUATE} complete. Check results in 'repository/results/'.")
+
+
 

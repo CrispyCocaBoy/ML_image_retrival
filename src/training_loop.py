@@ -6,6 +6,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 import os
 import csv
+import re 
 
 # Importing actual config and FineTunedCLIP from your project structure
 from config import config
@@ -14,7 +15,6 @@ from src.finetuned_clip import FineTunedCLIP
 class CLIPLoss(nn.Module):
     """
     Implements the Contrastive Language-Image Pre-training (CLIP) loss.
-
     This loss function calculates symmetric cross-entropy between image and text
     embeddings based on their cosine similarity. It requires a learnable
     temperature parameter (logit_scale) from the model.
@@ -33,8 +33,7 @@ class CLIPLoss(nn.Module):
         logits_per_image = logit_scale * image_features @ text_features.T
         logits_per_text = logit_scale * text_features @ image_features.T
 
-        # Create labels for cross-entropy: the diagonal elements correspond to the
-        # correct (positive) pairs. For a batch of N items, the labels are [0, 1, ..., N-1].
+        # Create labels for cross-entropy
         labels = torch.arange(len(image_features), device=image_features.device)
 
         # Calculate the total loss as the average of two cross-entropy losses:
@@ -44,16 +43,10 @@ class CLIPLoss(nn.Module):
                       F.cross_entropy(logits_per_text, labels)) / 2
         return total_loss
 
-def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", epochs=10, lr=1e-5):
+def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", 
+                      epochs=10, lr=1e-5, start_epoch: int = 0):
     """
     Trains a given PyTorch model using the CLIP-style hybrid (contrastive + cross-entropy) loss.
-
-    This function sets up the model for training, defines an Adam optimizer
-    and a CLIPLoss criterion. It then iterates through the specified number
-    of epochs, processing image-text pairs from the dataloader. For each batch,
-    it encodes both images and texts, computes the CLIP loss, performs
-    backpropagation, and updates the model's weights and the learnable temperature.
-    Training progress and loss are displayed using tqdm.
 
     Args:
         model (torch.nn.Module): The neural network model to be trained (e.g., FineTunedCLIP).
@@ -63,47 +56,45 @@ def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", ep
         val_dataloader (torch.utils.data.DataLoader): Dataloader for the validation data.
         device (str, optional): The device ('cuda' or 'cpu') to run the
                                 training on. Defaults to "cuda".
-        epochs (int, optional): The number of training epochs. Defaults to 10.
+        epochs (int, optional): The total number of training epochs to run (exclusive end).
+                                Training will run from `start_epoch` up to `epochs`.
+                                Defaults to 10.
         lr (float, optional): The learning rate for the Adam optimizer.
                               Defaults to 1e-5.
+        start_epoch (int, optional): The epoch number to start training from.
+                                     Useful for resuming training. Defaults to 0.
 
     Returns:
-        torch.nn.Module: The trained model.
+        Tuple[torch.nn.Module, List[str]]: A tuple containing:
+            - torch.nn.Module: The final trained model.
+            - List[str]: A list of file paths to all saved full model checkpoints (.pt files).
     """
     model = model.to(device)
     
-    # --- MODIFIED: Implement Discriminative Learning Rates ---
-    # Separate parameters into groups based on whether they belong to the
-    # original CLIP backbone or the newly added projection layers.
+    # Implement Discriminative Learning Rates
     optimizer_params = []
     clip_backbone_params = []
     projection_params = []
 
     for name, param in model.named_parameters():
-        if param.requires_grad: # Only consider trainable parameters
+        if param.requires_grad:
             if 'clip_model' in name:
-                # Parameters from the original CLIP backbone
                 clip_backbone_params.append(param)
             else:
-                # Parameters from the new projection layers
                 projection_params.append(param)
     
-    # Add parameter groups to the optimizer list
     if projection_params:
         optimizer_params.append({'params': projection_params, 'lr': lr})
     
     if clip_backbone_params:
-        # Apply a smaller learning rate to the pre-trained CLIP backbone
         backbone_lr = lr * config.clip_backbone_learning_rate_ratio
         optimizer_params.append({'params': clip_backbone_params, 'lr': backbone_lr})
 
-    # Initialize the Adam optimizer with the defined parameter groups
     optimizer = optim.Adam(optimizer_params, betas=(0.9, 0.98), eps=1e-6, weight_decay=config.weight_decay)
-    # --- END MODIFIED ---
 
     criterion = CLIPLoss()
 
-    # --- Setup directories for saving metrics and weights ---
+    # Setup directories for saving metrics and weights
     metrics_dir = os.path.join("repository", "metrics")
     all_weights_dir = os.path.join("repository", "all_weights")
     checkpoints_dir = os.path.join("repository", "checkpoints")
@@ -114,17 +105,25 @@ def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", ep
 
     metrics_file_path = os.path.join(metrics_dir, "training_metrics.csv")
     
-    # Open CSV file and write header
-    with open(metrics_file_path, 'w', newline='') as csvfile:
+    # Logic for appending or overwriting CSV based on start_epoch
+    if start_epoch > 0 and os.path.exists(metrics_file_path):
+        metrics_file_mode = 'a' # Append mode
+    else:
+        metrics_file_mode = 'w' # Write mode (overwrite)
+        
+    with open(metrics_file_path, metrics_file_mode, newline='') as csvfile:
         metric_writer = csv.writer(csvfile)
-        metric_writer.writerow(['epoch', 'train_loss', 'val_loss'])
+        if metrics_file_mode == 'w': # Write header only if overwriting
+            metric_writer.writerow(['epoch', 'train_loss', 'val_loss'])
+
+    saved_full_model_paths = []
 
     # --- Training Loop ---
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         # --- Training Phase ---
         model.train() # Set model to training mode
         total_train_loss = 0
-        train_loop = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{epochs} (Training)")
+        train_loop = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{epochs} (Training)") 
 
         for images, texts in train_loop:
             images = images.to(device)
@@ -138,7 +137,6 @@ def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", ep
             loss = criterion(image_features, text_features, model.logit_scale)
             loss.backward()
             
-            # Gradient Clipping: Essential when unfreezing large models to prevent exploding gradients.
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) 
             
             optimizer.step()
@@ -152,8 +150,8 @@ def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", ep
         # --- Validation Phase ---
         model.eval() # Set model to evaluation mode
         total_val_loss = 0
-        val_loop = tqdm(val_dataloader, desc=f"Epoch {epoch+1}/{epochs} (Validation)")
-        with torch.no_grad(): # No need to calculate gradients during validation
+        val_loop = tqdm(val_dataloader, desc=f"Epoch {epoch+1}/{epochs} (Validation)") 
+        with torch.no_grad():
             for images, texts in val_loop:
                 images = images.to(device)
                 texts = texts.to(device)
@@ -174,12 +172,15 @@ def train_clip_hybrid(model, train_dataloader, val_dataloader, device="cuda", ep
             metric_writer.writerow([epoch + 1, avg_train_loss, avg_val_loss])
 
         # --- Save model and weights for current epoch ---
-        # Save entire model
-        torch.save(model, os.path.join(all_weights_dir, f"model_epoch_{epoch+1}.pt"))
-        print(f"✅ Model saved to {os.path.join(all_weights_dir, f'model_epoch_{epoch+1}.pt')}")
+        # Save entire model (full model object)
+        full_model_path = os.path.join(all_weights_dir, f"model_epoch_{epoch+1}.pt")
+        torch.save(model, full_model_path)
+        print(f"Model saved to {full_model_path}")
+        saved_full_model_paths.append(full_model_path) # Add to list
 
         # Save only model's state_dict
-        torch.save(model.state_dict(), os.path.join(checkpoints_dir, f"weights_epoch_{epoch+1}.pth"))
-        print(f"✅ Weights saved to {os.path.join(checkpoints_dir, f'weights_epoch_{epoch+1}.pth')}")
+        state_dict_path = os.path.join(checkpoints_dir, f"weights_epoch_{epoch+1}.pth")
+        torch.save(model.state_dict(), state_dict_path)
+        print(f"Weights saved to {state_dict_path}")
 
-    return model
+    return model, saved_full_model_paths 
