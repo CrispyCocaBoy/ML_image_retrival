@@ -5,14 +5,14 @@ from types import SimpleNamespace
 config = SimpleNamespace(
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     # Dataset and Dataloader settings
-    train_dir="Competition/data/train",  # Corrected path based on previous discussion
-    query_dir="Competition/data/test/query",
-    gallery_dir="Competition/data/test/gallery",
+    train_dir="Competition/train",  # Corrected path based on previous discussion
+    query_dir="Competition/test/query",
+    gallery_dir="Competition/test/gallery",
     
     # Model and Training settings
     embedding_dim=512,         # Dimension of the projected embeddings
     batch_size=256,             # Batch size for training and inference
-    epochs=50,                 # Recommended starting point, increase later if needed
+    epochs=1,                 # Recommended starting point, increase later if needed
     learning_rate=1e-4,        # Learning rate for the NEW projection layers (higher)
     weight_decay=1e-3,         # Weight decay for regularization (L2 penalty)
     dropout_rate=0.3,          # Dropout rate for projection layers
@@ -27,4 +27,5 @@ config = SimpleNamespace(
     # Retrieval settings
     top_k=10,                   # Number of top results to retrieve
     distance_metric="cosine",  # Metric for similarity ("cosine" or "euclidean")
+    seed = 42
 )
