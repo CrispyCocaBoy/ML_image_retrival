@@ -1,0 +1,19 @@
+# Escludi tutte le cartelle _pycache_ in qualsiasi percorso
+__pycache__/
+
+# Escludi tutte le cartelle wandb ovunque
+**/wandb/
+
+# Escludi tutti i file con estensione .jpg, .ph e .pth ovunque si trovino
+*/.jpg
+*/.ph
+*/.pth
+*.ph
+*.pth
+
+.venv
+.idea
+.DS_store
+Competition/
+
+retrieval_results.json
