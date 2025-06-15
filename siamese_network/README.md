@@ -2,13 +2,13 @@
 
 This folder contains the implementation of a **Siamese Network** based on **CLIP ViT-B/32**, trained with **Contrastive Loss** for the task of **face image retrieval**.
 
-## 🧠 Overview
+## Overview
 
 In this approach, we fine-tune a **Siamese architecture** where two input images are passed through **shared CLIP ViT-B/32 encoders** to produce embeddings. These are then compared using **cosine distance**, and the model is trained to distinguish similar from dissimilar pairs using **Contrastive Loss**.
 
 The training process focuses on maximizing similarity between positive pairs (same identity) and minimizing it for negative pairs (different identities).
 
-## 🧱 Architecture Summary
+## Architecture Summary
 
 * **Encoder**: CLIP ViT-B/32 (visual branch only)
 * **Shared Weights**: Yes (Siamese structure)
@@ -17,7 +17,7 @@ The training process focuses on maximizing similarity between positive pairs (sa
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 siamese_network/
@@ -40,7 +40,7 @@ siamese_network/
 
 ---
 
-## 🚀 Training
+## Training
 
 To start training, edit `main.py` and set:
 
@@ -60,7 +60,7 @@ This will:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 To evaluate the model, set in `main.py`:
 
@@ -79,7 +79,7 @@ This will:
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
 pip install -r requirements.txt
@@ -95,7 +95,7 @@ Dependencies include:
 
 ---
 
-## 📊 Results
+## Results
 
 This Siamese ViT-B/32 architecture trained with Contrastive Loss demonstrates robust image retrieval capabilities by learning fine-grained facial similarity.
 
