@@ -10,8 +10,6 @@ __pycache__/
 */.pth
 *.ph
 *.pth
-repository/
-
 
 .venv
 .idea
