@@ -11,7 +11,7 @@ OUTPUT_CSV_PATH = "repository/submission_accuracy.csv" # The path for your CSV f
 if __name__ == "__main__":
     groupname = "SimpleGuys"  
     
-    print(f"🚀 Starting analysis and submission of all retrieval results in '{RESULTS_DIR}'...")
+    print(f"Starting analysis and submission of all retrieval results in '{RESULTS_DIR}'...")
 
     # --- Find all JSON files in the results directory ---
     if not os.path.exists(RESULTS_DIR):

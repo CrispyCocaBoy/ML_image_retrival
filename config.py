@@ -11,10 +11,10 @@ config = SimpleNamespace(
     
     # Model and Training settings
     embedding_dim=512,         # Dimension of the projected embeddings
-    batch_size=256,             # Batch size for training and inference
-    epochs=2,                 # Recommended starting point, increase later if needed
+    batch_size=128,             # Batch size for training and inference
+    epochs=40,                 # Recommended starting point, increase later if needed
     learning_rate=1e-4,        # Learning rate for the NEW projection layers 
-    weight_decay=1e-3,         # Weight decay for regularization (L2 penalty)
+    weight_decay=1e-4,         # Weight decay for regularization (L2 penalty)
     dropout_rate=0.3,          # Dropout rate for projection layers
     
     # --- Control training behavior ---

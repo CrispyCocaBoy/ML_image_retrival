@@ -68,7 +68,8 @@ def check_and_train_model():
     initial_model = FineTunedCLIP(
         device,
         cfg.embedding_dim,
-        freeze_clip=cfg.freeze_clip 
+        freeze_clip=cfg.freeze_clip,
+        clip_model=clip_model
     ).to(device)
 
 
