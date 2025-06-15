@@ -64,7 +64,7 @@ Install with:
 pip install -r requirements.txt
 ```
 
-## 📊 Results
+## Results
 
 The ViT-B/32 + ArcFace model demonstrated strong generalization, especially on face-like datasets.
 
